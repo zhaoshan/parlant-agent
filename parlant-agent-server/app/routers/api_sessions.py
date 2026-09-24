@@ -71,6 +71,7 @@ async def create_session(body: SessionCreateBody, request: Request) -> dict[str,
             title=body.title,
             source=body.source,
             mode=body.mode,
+            variables=body.variables,
         )
     except Exception as exc:  # noqa: BLE001
         raise _map_http_error(exc, "创建会话失败") from exc

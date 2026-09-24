@@ -67,6 +67,25 @@ class RuntimeClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def override_variables(
+        self,
+        agent_id: str,
+        customer_id: str,
+        variables: dict[str, Any],
+    ) -> dict[str, Any]:
+        """按客户维度覆盖已加载 agent 实例的 Context Variable 值。
+
+        转发 runtime `POST /internal/agents/{id}/variables/override`（按**变量名**解析引擎
+        id → update_value(key=customer.id)）；用于模拟对话弹窗"设置变量覆盖 journey 配置"。
+        """
+        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+            resp = await client.post(
+                f"{self._base}/internal/agents/{agent_id}/variables/override",
+                json={"customer_id": customer_id, "variables": variables},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     # ------------------------------------------------------------ 会话代理（3.3）
     async def create_session(
         self,

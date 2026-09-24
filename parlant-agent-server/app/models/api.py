@@ -43,6 +43,11 @@ class SessionCreateBody(BaseModel):
         default="published",
         description="试跑模式：published(线上已发布) / draft(当前草稿，独立 @draft 实例，不影响线上)",
     )
+    variables: dict[str, Any] | None = Field(
+        default=None,
+        description="变量覆盖（按变量**名**，客户维度）：{name: value}，创建会话前写入 runtime "
+        "（key=customer.id，覆盖 journey/Agent 构建默认值；同 customer 共享，仅本会话客户生效）",
+    )
 
 
 class CustomerCreateBody(BaseModel):

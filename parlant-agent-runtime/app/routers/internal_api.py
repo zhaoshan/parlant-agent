@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
+from parlant.core.context_variables import ContextVariableStore
 
 from app.models import parse_definition
 from app.services import get_runtime
@@ -60,6 +61,42 @@ async def configure_internal_api(app: FastAPI) -> None:
         if not ok:
             raise HTTPException(status_code=404, detail=f"agent '{agent_id}' 未加载")
         return {"agent_id": agent_id, "unloaded": True}
+
+    @app.post("/internal/agents/{agent_id}/variables/override")
+    async def override_variables(agent_id: str, request: Request) -> dict[str, Any]:
+        """按**客户维度**覆盖该已加载 agent 实例的 Context Variable 值。
+
+        引擎变量 id 由 SDK 随机生成（定义层 `var_*` 只是标签），故按**变量名**解析：
+        在已加载实例的 `list_variables()` 里 name → id，再 `update_value(variable_id,
+        key=customer_id, data=value)`（key=customer.id 优先级最高，覆盖 Agent 构建默认；
+        同 customer 的所有会话共享该值 → 模拟对话换身份互不干扰）。
+
+        引擎 `update_value` 按 (variable_id, key) **upsert**，变量名未找到只记 missing 不报错。
+        """
+        rt = get_runtime()
+        agent = rt.registry.get(agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"agent '{agent_id}' 未加载")
+        payload = await request.json()
+        customer_id = str(payload.get("customer_id") or "")
+        if not customer_id:
+            raise HTTPException(status_code=422, detail="缺少 customer_id")
+        variables = payload.get("variables") or {}
+        if not isinstance(variables, dict):
+            raise HTTPException(status_code=422, detail="variables 必须是 {name: value} 对象")
+
+        store = rt.server.container[ContextVariableStore]
+        by_name = {v.name: v for v in await agent.list_variables()}
+        applied: dict[str, str] = {}
+        missing: list[str] = []
+        for name, value in variables.items():
+            var = by_name.get(str(name))
+            if var is None:
+                missing.append(str(name))
+                continue
+            await store.update_value(variable_id=var.id, key=customer_id, data=value)
+            applied[str(name)] = var.id
+        return {"agent_id": agent_id, "customer_id": customer_id, "applied": applied, "missing": missing}
 
     @app.get("/internal/health")
     async def internal_health() -> dict[str, Any]:

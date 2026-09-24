@@ -26,6 +26,17 @@ export interface AgentDetail extends AgentInfo {
   definition: unknown
 }
 
+/** Agent 定义里的 Context Variable（definition.variables.variables[]；引擎 id 随机生成，这里 id 只是定义层标签） */
+export interface AgentVariable {
+  id: string
+  name: string
+  /** string / number / boolean（引擎不消费 type，仅 UI 输入形态用） */
+  type: string
+  description?: string
+  default_value?: unknown
+  allowed_values?: unknown[]
+}
+
 // ---------- 会话 / 客户 ----------
 export interface Customer {
   id: string

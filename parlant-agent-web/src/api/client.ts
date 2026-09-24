@@ -50,12 +50,15 @@ export const customersApi = {
 
 // ---------- 会话 ----------
 export const sessionsApi = {
-  create: (body: { agent_id: string; customer_id: string; user_id?: string; title?: string; source?: string; mode?: string }) =>
-    request<{ session: Session; ledger: SessionLedgerRow | null }>('/api/sessions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
+  create: (body: { agent_id: string; customer_id: string; user_id?: string; title?: string; source?: string; mode?: string; variables?: Record<string, unknown> }) =>
+    request<{ session: Session; ledger: SessionLedgerRow | null; variable_overrides?: { applied?: Record<string, string>; missing?: string[]; error?: string } }>(
+      '/api/sessions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+    ),
   detail: (id: string) => request<{ session: Session; ledger: SessionLedgerRow | null }>(`/api/sessions/${id}`),
   /** 会话列表：按 agent/来源/用户过滤（条件可空，默认查全量） */
   list: (params: { user_id?: string; agent_id?: string; source?: string; limit?: number; offset?: number } = {}) => {

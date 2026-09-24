@@ -63,11 +63,16 @@ class SessionService:
         title: str | None = None,
         source: str = "online",
         mode: str = "published",
+        variables: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """转发 runtime 建会话；支持草稿试跑（mode=draft → 独立 @draft 实例，不影响线上）。
 
         会话实际绑定 agent_instance_id（线上=agent_id；草稿={agent_id}@draft），
         台账记录 agent_version/agent_status 以便校验"变更是否生效"。
+
+        `variables`（可选）：按变量**名**做客户维度覆盖（key=customer.id，覆盖 journey/Agent
+        构建默认值）。在实例就绪（草稿已加载 / 线上已加载）后、建会话前写入 runtime ——
+        保证覆盖落在本次会话绑定的实例上；任何覆盖失败不阻断会话创建，结果并入响应。
         """
         if mode == "draft":
             # 1) 确保草稿实例已按最新 draft 定义加载（独立实例，线上实体不动）
@@ -78,6 +83,15 @@ class SessionService:
             instance_id = agent_id
             version = await self._published_version(agent_id)
             status = "published"
+        # 1.5) 变量覆盖（可选；best-effort，实例未加载/变量名缺失都不阻断建会话）
+        overrides: dict[str, Any] | None = None
+        if variables:
+            try:
+                overrides = await self._runtime.override_variables(
+                    instance_id, customer_id, variables
+                )
+            except Exception as exc:  # noqa: BLE001 - 覆盖失败不阻断会话创建
+                overrides = {"error": f"变量覆盖失败：{exc}"}
         # 2) 绑定实例建会话
         session = await self._runtime.create_session(instance_id, customer_id, title)
         # 3) 落台账（记录实例/版本/状态）
@@ -97,7 +111,10 @@ class SessionService:
                 self._draft_sessions[session["id"]] = agent_id
         except Exception as exc:  # noqa: BLE001 - 台账失败不应阻断会话
             ledger = {"error": f"台账写入失败：{exc}"}
-        return {"session": session, "ledger": ledger}
+        out: dict[str, Any] = {"session": session, "ledger": ledger}
+        if overrides:
+            out["variable_overrides"] = overrides
+        return out
 
     async def _published_version(self, agent_id: str) -> str | None:
         try:

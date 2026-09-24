@@ -1,10 +1,11 @@
 /** 模拟对话（优先实现）：会话边栏可收起 + 新对话 + SSE 流式聊天 + 消息历史（session_messages）。 */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { customersApi, sessionsApi } from '../api/client'
-import type { AgentInfo, SessionLedgerRow, SessionMessage } from '../api/types'
+import { agentsApi, customersApi, sessionsApi } from '../api/client'
+import type { AgentInfo, AgentVariable, SessionLedgerRow, SessionMessage } from '../api/types'
 import { useApp } from '../store/app'
 import { SendIcon, TraceIcon } from '../components/Icons'
+import { Switch } from './build/fields'
 
 function uuid() {
   return crypto.randomUUID()
@@ -477,7 +478,12 @@ function msg(
   }
 }
 
-// ---------- 新对话对话框（选 Agent + 客户身份） ----------
+// ---------- 新对话对话框（选 Agent + 客户身份 + 变量覆盖） ----------
+interface OverrideEntry {
+  active: boolean
+  value: unknown
+}
+
 function NewConversationDialog(props: {
   agents: AgentInfo[]
   userId: string
@@ -493,6 +499,53 @@ function NewConversationDialog(props: {
   const [customerName, setCustomerName] = useState('')
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
+  // 变量覆盖：定义元数据（name/type/默认值，来自 agent 定义）+ 用户逐变量覆盖态
+  const [varMeta, setVarMeta] = useState<AgentVariable[]>([])
+  const [varLoading, setVarLoading] = useState(false)
+  const [overrides, setOverrides] = useState<Record<string, OverrideEntry>>({})
+
+  // 切换 Agent 时拉取该 agent 定义里的变量清单（name→type/default 供输入控件）
+  useEffect(() => {
+    let cancelled = false
+    if (!agentId) {
+      setVarMeta([])
+      return
+    }
+    setVarLoading(true)
+    agentsApi
+      .detail(agentId)
+      .then((d) => {
+        if (cancelled) return
+        const def = d.definition as { variables?: { variables?: AgentVariable[] } } | null
+        setVarMeta(def?.variables?.variables ?? [])
+        setOverrides({})
+      })
+      .catch(() => {
+        if (!cancelled) setVarMeta([])
+      })
+      .finally(() => {
+        if (!cancelled) setVarLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [agentId])
+
+  const setVarActive = (name: string, v: AgentVariable, active: boolean) => {
+    setOverrides((prev) => {
+      if (!active) {
+        const next = { ...prev }
+        delete next[name]
+        return next
+      }
+      const cur = prev[name]
+      // 首次开启：默认带出定义里的默认值（可改）；重复开启保留已输入值
+      return { ...prev, [name]: { active: true, value: cur ? cur.value : v.default_value } }
+    })
+  }
+  const setVarValue = (name: string, value: unknown) => {
+    setOverrides((prev) => ({ ...prev, [name]: { active: true, value } }))
+  }
 
   const start = async () => {
     if (!agentId || busy) return
@@ -504,6 +557,15 @@ function NewConversationDialog(props: {
         await customersApi.create({ name: customerName || '客户', id })
         cid = id
       }
+      // 汇总"已开启且值非空"的变量覆盖（按变量名，runtime 按名解析到引擎 id）
+      const vars: Record<string, unknown> = {}
+      for (const v of varMeta) {
+        const o = overrides[v.name]
+        if (!o?.active) continue
+        if (o.value === undefined || o.value === null) continue
+        if (typeof o.value === 'string' && o.value.trim() === '') continue
+        vars[v.name] = o.value
+      }
       const res = await sessionsApi.create({
         agent_id: agentId,
         customer_id: cid,
@@ -511,7 +573,14 @@ function NewConversationDialog(props: {
         title: title || undefined,
         source: 'simulate',
         mode,
+        variables: Object.keys(vars).length ? vars : undefined,
       })
+      const vo = res.variable_overrides
+      if (vo?.missing?.length) {
+        alert(`部分变量未覆盖（当前 Agent 无此变量名）：${vo.missing.join('、')}`)
+      } else if (vo?.error) {
+        alert(`变量覆盖失败（会话已创建）：${vo.error}`)
+      }
       onCreated(res.session.id)
     } catch (err) {
       alert(`创建会话失败：${err}`)
@@ -526,7 +595,7 @@ function NewConversationDialog(props: {
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-[15px] font-semibold">开始新对话</h3>
-            <p className="mt-1 text-[12px] text-[var(--muted)]">选择 Agent 与客户身份（POST /api/customers → POST /api/sessions）</p>
+            <p className="mt-1 text-[12px] text-[var(--muted)]">选择 Agent 与客户身份，可覆盖 journey 配置的变量（POST /api/customers → POST /api/sessions）</p>
           </div>
           <button className="cursor-pointer rounded-md p-1 text-[var(--muted)] hover:bg-[#EDF0F4]" onClick={onClose}>✕</button>
         </div>
@@ -579,12 +648,35 @@ function NewConversationDialog(props: {
             使用内置 guest 客户快速冒烟
           </label>
           {!useGuest && (
-            <>
+            <div className="grid grid-cols-2 items-start gap-2.5">
               <Field label="客户 ID" mono value={customerId} onChange={setCustomerId} placeholder="唯一标识，缺省自动生成" />
               <Field label="姓名" value={customerName} onChange={setCustomerName} placeholder="客户称呼" />
-            </>
+            </div>
           )}
           <Field label="会话标题" value={title} onChange={setTitle} placeholder="如：提前结清咨询" />
+        </div>
+
+        {/* 3 · 变量覆盖（可选） */}
+        <div className="mt-4 text-[12.5px] font-semibold text-[var(--ink-2)]">3 · 变量覆盖（可选）</div>
+        <p className="mt-0.5 text-[10.5px] text-[var(--muted)]">
+          按客户维度覆盖 journey 配置的变量默认值，仅本会话客户生效（key=customer.id 优先级最高）
+        </p>
+        <div className="mt-2 grid grid-cols-2 items-start gap-2">
+          {varLoading ? (
+            <div className="col-span-2 py-3 text-center text-[11.5px] text-[var(--muted)]">加载变量中…</div>
+          ) : varMeta.length ? (
+            varMeta.map((v) => (
+              <VarOverrideRow
+                key={v.name}
+                v={v}
+                entry={overrides[v.name]}
+                onToggle={(active) => setVarActive(v.name, v, active)}
+                onValue={(value) => setVarValue(v.name, value)}
+              />
+            ))
+          ) : (
+            <div className="col-span-2 py-3 text-center text-[11.5px] text-[var(--muted)]">该 Agent 没有配置 Context Variable</div>
+          )}
         </div>
 
         <div className="mt-4 flex items-center gap-2.5 border-t border-[var(--line)] pt-4">
@@ -601,6 +693,92 @@ function NewConversationDialog(props: {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** 单条变量覆盖行：勾选"覆盖"后按类型出控件（boolean→Switch，allowed_values→下拉，number→数字，string→多行文本）。 */
+function VarOverrideRow(props: {
+  v: AgentVariable
+  entry?: OverrideEntry
+  onToggle: (active: boolean) => void
+  onValue: (value: unknown) => void
+}) {
+  const { v, entry, onToggle, onValue } = props
+  const active = !!entry?.active
+  const value = entry?.value
+  const allowed = Array.isArray(v.allowed_values) && v.allowed_values.length > 0 ? v.allowed_values : null
+
+  const fmt = (x: unknown) => {
+    if (x === undefined || x === null) return ''
+    return typeof x === 'object' ? JSON.stringify(x) : String(x)
+  }
+  // 控件占满行宽（两栏布局下尽量宽）
+  const inputCls =
+    'h-[34px] w-full rounded-md border border-[var(--line-strong)] bg-white px-2.5 text-[12.5px] text-[var(--ink)] outline-none focus:border-[var(--primary)] focus:shadow-[0_0_0_3px_var(--primary-weak)]'
+  const textareaCls =
+    'w-full resize-y rounded-md border border-[var(--line-strong)] bg-white px-2.5 py-2 text-[12.5px] leading-relaxed text-[var(--ink)] outline-none focus:border-[var(--primary)] focus:shadow-[0_0_0_3px_var(--primary-weak)]'
+
+  let control: React.ReactNode = null
+  if (v.type === 'boolean') {
+    control = (
+      <div className="flex items-center gap-2">
+        <Switch checked={value === true} onChange={(b) => onValue(b)} />
+        <span className="text-[11.5px] text-[var(--muted)]">{value === true ? 'true' : 'false'}</span>
+      </div>
+    )
+  } else if (allowed) {
+    control = (
+      <select className={inputCls} value={fmt(value)} onChange={(e) => onValue(e.target.value)}>
+        {allowed.map((a) => (
+          <option key={fmt(a)} value={fmt(a)}>
+            {fmt(a)}
+          </option>
+        ))}
+      </select>
+    )
+  } else if (v.type === 'number' || v.type === 'integer') {
+    control = (
+      <input
+        type="number"
+        className={inputCls}
+        value={value === undefined || value === null ? '' : String(value)}
+        placeholder={fmt(v.default_value) || '0'}
+        onChange={(e) => onValue(e.target.value === '' ? undefined : Number(e.target.value))}
+      />
+    )
+  } else {
+    control = (
+      <textarea
+        rows={3}
+        className={textareaCls}
+        value={value === undefined || value === null ? '' : String(value)}
+        placeholder={fmt(v.default_value) || '留空不覆盖'}
+        onChange={(e) => onValue(e.target.value)}
+      />
+    )
+  }
+
+  return (
+    <div className={`rounded-lg border bg-[var(--bg)] p-2.5 ${active ? 'border-[var(--primary-weak)]' : 'border-[var(--line)]'}`}>
+      <div className="flex items-center gap-2">
+        <button
+          className={`grid h-4 w-4 flex-none cursor-pointer place-items-center rounded border text-white ${active ? 'border-[var(--primary)] bg-[var(--primary)]' : 'border-[var(--line-strong)] bg-white'}`}
+          onClick={() => onToggle(!active)}
+          aria-pressed={active}
+          aria-label={`覆盖变量 ${v.name}`}
+        >
+          {active && <span className="text-[10px] leading-none">✓</span>}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="mono text-[12px] font-semibold text-[var(--ink)]">{v.name}</span>
+            <span className="rounded bg-[#EDF0F4] px-1.5 py-0.5 text-[9.5px] text-[var(--muted)]">{v.type}</span>
+          </div>
+          {v.description ? <div className="line-clamp-2 text-[10.5px] text-[var(--muted)]">{v.description}</div> : null}
+        </div>
+      </div>
+      {active && <div className="mt-2 pl-6">{control}</div>}
     </div>
   )
 }
