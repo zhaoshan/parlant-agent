@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模拟对话 · AgentStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sidebar:#FFFFFF; --sidebar-ink:#475569; --sidebar-dim:#94A3B8;
+  --bg:#F7F8FA; --surface:#FFFFFF; --line:#E4E7EC; --line-strong:#CBD2DC;
+  --ink:#0F172A; --ink-2:#475569; --muted:#94A3B8;
+  --primary:#4F46E5; --primary-weak:#EEF2FF; --primary-line:#C7D2FE;
+  --success:#059669; --success-weak:#ECFDF5;
+  --warning:#B45309; --warning-weak:#FFFBEB;
+  --danger:#DC2626;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+.agent-ctx{padding:12px 16px;border-bottom:1px solid #1E293B}
+.ac-label{font-size:10.5px;color:var(--sidebar-dim);margin-bottom:6px;letter-spacing:.02em}
+.ac-select{display:flex;align-items:center;gap:8px;background:#151F33;border:1px solid #1E293B;border-radius:8px;padding:8px 10px;cursor:pointer}
+.ac-select:hover{background:#1E293B}
+.ac-ava{width:22px;height:22px;border-radius:6px;background:var(--primary);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:600;flex:none}
+.ac-name{font-size:12.5px;font-weight:600;color:#F1F5F9}
+.ac-id{font-size:9.5px;color:var(--sidebar-dim);margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:74px}
+.ac-caret{color:var(--sidebar-dim);font-size:10px}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{display:flex;min-height:100vh}
+
+/* ---------- Sidebar ---------- */
+.sidebar{width:224px;background:var(--sidebar);color:var(--sidebar-ink);display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0;z-index:30}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;border-bottom:1px solid #1E293B}
+.brand-mark{width:26px;height:26px;border-radius:7px;background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:none}
+.brand-name{font-size:13px;font-weight:600;color:#F1F5F9;line-height:1.2}
+.brand-sub{font-size:10.5px;color:var(--sidebar-dim)}
+.nav{padding:10px 8px;flex:1}
+.nav-group{font-size:10.5px;color:var(--sidebar-dim);padding:10px 10px 5px;letter-spacing:.02em}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;color:var(--sidebar-ink);cursor:pointer;font-size:13px}
+.nav-item svg{flex:none;opacity:.75}
+.nav-item:hover{background:#151F33}
+.nav-item.active{background:#1E293B;color:#fff}
+.nav-item.active svg{opacity:1;color:#A5B4FC}
+.nav-item .count{margin-left:auto;font-size:11px;color:var(--sidebar-dim);background:#151F33;border-radius:10px;padding:1px 7px}
+.nav-item.active .count{color:#A5B4FC}
+.sidebar-foot{padding:10px 16px;border-top:1px solid #1E293B;font-size:11.5px;color:var(--sidebar-dim);display:flex;align-items:center;gap:8px}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--success)}
+
+/* ---------- Main ---------- */
+.main{margin-left:224px;flex:1;min-width:0;display:flex;flex-direction:column;height:100vh}
+.topbar{height:52px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 16px 0 12px;gap:12px;flex:none}
+.tb-toggle{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;color:var(--muted);cursor:pointer;border:0;background:transparent;flex:none}
+.tb-toggle:hover{background:#EDF0F4;color:var(--ink)}
+.agent-chip{display:flex;align-items:center;gap:9px}
+.agent-ava{width:28px;height:28px;border-radius:8px;background:var(--primary-weak);color:var(--primary);display:grid;place-items:center;font-weight:600;font-size:13px}
+.agent-meta .a-name{font-size:13px;font-weight:600;display:flex;align-items:center;gap:7px}
+.agent-meta .a-name .pub{width:6px;height:6px;border-radius:50%;background:var(--success)}
+.agent-meta .a-sub{font-size:11px;color:var(--muted)}
+.sess-title{display:flex;align-items:center;gap:7px;color:var(--ink-2);font-size:12.5px;padding-left:16px;border-left:1px solid var(--line)}
+.sess-title b{color:var(--ink);font-weight:600}
+.topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid transparent;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#4338CA}
+.btn-ghost{background:var(--surface);border-color:var(--line-strong);color:var(--ink-2)}
+.btn-ghost:hover{background:#F1F5F9;color:var(--ink)}
+.trace-btn{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 11px;border-radius:7px;font-size:12px;cursor:pointer;background:var(--primary-weak);color:var(--primary);border:1px solid var(--primary-line);font-family:inherit;font-weight:500}
+.trace-btn:hover{background:#E0E7FF}
+
+/* ---------- Body ---------- */
+.body{flex:1;display:flex;min-height:0;position:relative}
+
+/* sessions sidebar (collapsible) */
+.sess-panel{width:268px;flex:none;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;transition:margin-left .18s ease,width .18s ease}
+.sess-panel.collapsed{margin-left:-268px;width:268px}
+.sess-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+.sess-head .s-title{font-size:13px;font-weight:600;flex:1}
+.sess-search{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--line-strong);border-radius:7px;height:30px;padding:0 9px;color:var(--muted);margin:10px 14px 8px}
+.sess-search input{border:0;outline:0;font-size:12px;flex:1;font-family:inherit;background:transparent;color:var(--ink)}
+.sess-list{flex:1;overflow-y:auto;padding:0 8px 8px}
+.sess-item{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:8px;padding:9px 10px;cursor:pointer;border:1px solid transparent;font-family:inherit}
+.sess-item:hover{background:var(--bg)}
+.sess-item.cur{background:var(--primary-weak);border-color:var(--primary-line)}
+.sess-item .i-top{display:flex;align-items:center;gap:6px}
+.sess-item .i-title{font-size:12.5px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess-item .i-title .live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block;flex:none}
+.sess-item .i-time{margin-left:auto;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.sess-item .i-prev{font-size:11.5px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess-item .i-id{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);margin-top:2px}
+.sess-empty{padding:30px 16px;text-align:center;color:var(--muted);font-size:12px}
+
+/* conversation */
+.conversation{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg)}
+.thread{flex:1;overflow-y:auto;padding:26px 32px 12px}
+.thread-inner{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.turn{display:flex;flex-direction:column;gap:6px}
+.turn.customer{align-items:flex-start}
+.turn.agent{align-items:flex-end}
+.turn .who{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted)}
+.turn.agent .who{flex-direction:row-reverse}
+.bubble{max-width:72%;border-radius:12px;padding:10px 14px;line-height:1.6;font-size:13px}
+.turn.customer .bubble{background:var(--surface);border:1px solid var(--line);border-top-left-radius:4px}
+.turn.agent .bubble{background:var(--primary-weak);border:1px solid var(--primary-line);border-top-right-radius:4px}
+.bubble .ts{display:block;font-size:10.5px;color:var(--muted);margin-top:5px}
+.streaming{display:flex;align-items:center;gap:6px;color:var(--primary);font-size:12px}
+.streaming .dots{display:inline-flex;gap:3px}
+.streaming .dots i{width:5px;height:5px;border-radius:50%;background:var(--primary);animation:blink 1.2s infinite}
+.streaming .dots i:nth-child(2){animation-delay:.2s}
+.streaming .dots i:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.status-line{display:flex;align-items:center;gap:6px;margin-top:2px}
+.status-chip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--ink-2);background:#fff;border:1px solid var(--line);border-radius:5px;padding:2px 7px}
+.status-chip .s-dot{width:5px;height:5px;border-radius:50%;background:var(--muted)}
+.status-chip.ok .s-dot{background:var(--success)}
+.status-chip.busy .s-dot{background:var(--warning);animation:blink 1.2s infinite}
+.tool-card{border:1px solid var(--line);border-radius:9px;background:#fff;overflow:hidden;max-width:72%}
+.tool-head{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;font-size:12px;color:var(--ink-2);background:#FBFCFD}
+.tool-head:hover{background:#F4F6F9}
+.tool-head .t-icon{width:22px;height:22px;border-radius:6px;background:var(--success-weak);color:var(--success);display:grid;place-items:center;flex:none}
+.tool-head .t-name{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--ink);font-weight:500}
+.tool-head .t-status{margin-left:auto;font-size:10.5px;color:var(--muted)}
+.tool-body{border-top:1px solid var(--line);padding:0;max-height:0;overflow:hidden;transition:max-height .18s}
+.tool-card.open .tool-body{max-height:260px;overflow:auto}
+.tool-row{padding:8px 12px;font-size:12px;border-top:1px solid var(--line)}
+.tool-row:first-child{border-top:0}
+.tool-row .k{color:var(--muted);font-size:11px;margin-bottom:3px}
+.tool-row pre{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--bg);border-radius:6px;padding:7px 9px;white-space:pre-wrap;word-break:break-all;color:var(--ink-2)}
+.msg-tools{display:flex;align-items:center;gap:10px;margin-top:5px}
+.trace-link{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--primary);cursor:pointer;text-decoration:none}
+.trace-link:hover{text-decoration:underline}
+.trace-link .tid{font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:10.5px}
+.composer{border-top:1px solid var(--line);background:var(--surface);padding:14px 32px 18px;flex:none}
+.composer-inner{max-width:720px;margin:0 auto}
+.input-shell{border:1px solid var(--line-strong);border-radius:12px;background:#fff;display:flex;align-items:flex-end;padding:10px 10px 10px 14px;transition:border-color .12s,box-shadow .12s}
+.input-shell:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak)}
+.input-shell textarea{border:0;outline:0;resize:none;flex:1;font-family:inherit;font-size:13px;line-height:1.55;max-height:140px;min-height:22px;background:transparent;color:var(--ink)}
+.send-btn{width:32px;height:32px;border-radius:8px;background:var(--primary);color:#fff;border:0;display:grid;place-items:center;cursor:pointer;flex:none}
+.send-btn:hover{background:#4338CA}
+.send-btn:disabled{background:#A5B4FC;cursor:not-allowed}
+.composer-hint{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:11px;color:var(--muted)}
+.composer-hint .mono{font-size:10.5px}
+
+/* exec rail (collapsible) */
+.rail{width:300px;flex:none;background:var(--surface);border-left:1px solid var(--line);overflow-y:auto;padding:16px;transition:margin-right .18s ease}
+.rail.collapsed{margin-right:-300px}
+.rail-sec{margin-bottom:22px}
+.rail-sec h4{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.03em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.rail-sec h4 svg{opacity:.7}
+.big-status{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;background:var(--success-weak);font-size:12px;color:var(--success);font-weight:500}
+.big-status .s-dot{width:7px;height:7px;border-radius:50%;background:var(--success)}
+.journey-card{border:1px solid var(--line);border-radius:9px;padding:12px}
+.journey-name{font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:7px}
+.journey-id{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);margin-top:3px}
+.jstep{display:flex;gap:9px;margin-top:11px}
+.jstep .track{display:flex;flex-direction:column;align-items:center}
+.jstep .dot{width:9px;height:9px;border-radius:50%;border:2px solid var(--line-strong);background:#fff;flex:none}
+.jstep .track::after{content:'';width:2px;flex:1;background:var(--line);min-height:14px;margin-top:3px}
+.jstep:last-child .track::after{display:none}
+.jstep.done .dot{background:var(--success);border-color:var(--success)}
+.jstep.cur .dot{background:var(--primary);border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak)}
+.jstep .jbody{font-size:12px;color:var(--ink-2);padding-bottom:12px}
+.jstep.cur .jbody{color:var(--ink);font-weight:500}
+.matched-item{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;color:var(--ink-2);margin-bottom:7px}
+.matched-item .gid{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--bg);padding:1px 5px;border-radius:4px;margin-top:1px;flex:none}
+.trace-box{border:1px dashed var(--primary-line);background:var(--primary-weak);border-radius:8px;padding:11px 12px;font-size:11.5px;color:var(--primary)}
+.trace-box .tid{font-family:'JetBrains Mono',monospace;font-size:11px;display:block;margin:6px 0;word-break:break-all}
+.rail-toggle{position:absolute;right:0;top:10px;width:24px;height:24px;border-radius:6px 0 0 6px;background:var(--surface);border:1px solid var(--line);border-right:0;display:grid;place-items:center;color:var(--muted);cursor:pointer;z-index:5}
+
+/* ---------- New conversation dialog ---------- */
+.dialog-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:60;display:grid;place-items:center}
+.dialog{width:640px;max-height:82vh;background:var(--surface);border-radius:12px;overflow:auto;padding:22px}
+.dialog h3{font-size:15px;font-weight:600;margin-bottom:4px}
+.dialog .d-sub{font-size:12px;color:var(--muted);margin-bottom:18px}
+.dialog-close{float:right;width:28px;height:28px;border-radius:6px;border:0;background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center}
+.dialog-close:hover{background:#EDF0F4}
+.agent-opt{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin-bottom:9px;cursor:pointer;transition:border-color .12s,box-shadow .12s}
+.agent-opt:hover{border-color:var(--primary-line)}
+.agent-opt.sel{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak)}
+.agent-opt .radio{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line-strong);flex:none}
+.agent-opt.sel .radio{border:4.5px solid var(--primary)}
+.agent-opt .ao-name{font-size:13px;font-weight:600}
+.agent-opt .ao-id{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted)}
+.agent-opt .ao-desc{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+.field{display:flex;flex-direction:column;gap:6px;margin-top:14px}
+.field label{font-size:12px;font-weight:500;color:var(--ink-2)}
+.field .req{color:var(--danger)}
+.field .hint{font-size:11px;color:var(--muted)}
+.input{height:34px;border:1px solid var(--line-strong);border-radius:7px;padding:0 11px;font-size:12.5px;font-family:inherit;color:var(--ink);outline:0}
+.input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak)}
+.input.mono{font-family:'JetBrains Mono',monospace}
+.switch-row{display:flex;align-items:center;gap:8px;height:34px}
+.switch{width:32px;height:18px;border-radius:9px;background:#CBD2DC;position:relative;cursor:pointer;flex:none}
+.switch.on{background:var(--primary)}
+.switch::after{content:'';position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:transform .15s}
+.switch.on::after{transform:translateX(14px)}
+.d-footer{display:flex;align-items:center;gap:10px;margin-top:20px;border-top:1px solid var(--line);padding-top:16px}
+.d-footer .spacer{flex:1}
+
+
+
+/* ===== v3.2 浅色侧栏 + 当前Agent下拉 ===== */
+.sidebar{background:#FFFFFF;border-right:1px solid #E4E7EC;color:#475569}
+.sidebar .brand{border-bottom:1px solid #E4E7EC}
+.sidebar .brand-name{color:#0F172A}
+.sidebar .brand-sub{color:#94A3B8}
+.sidebar .nav-item{color:#475569}
+.sidebar .nav-item svg{opacity:.75}
+.sidebar .nav-item:hover{background:#F1F5F9;color:#0F172A}
+.sidebar .nav-item.active{background:#EEF2FF;color:#4F46E5;font-weight:500}
+.sidebar .nav-item.active svg{opacity:1;color:#4F46E5}
+.sidebar .nav-item .count{color:#94A3B8;background:#EEF2FF}
+.sidebar .nav-item.active .count{color:#4F46E5}
+.sidebar .sidebar-foot{border-top:1px solid #E4E7EC;color:#94A3B8}
+.sidebar .agent-ctx{margin:12px 12px 6px;padding:9px 11px;background:#F7F8FA;border:1px solid #E4E7EC;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:9px;position:relative}
+.sidebar .agent-ctx:hover{background:#F1F5F9;border-color:#CBD2DC}
+.sidebar .ac-label{font-size:10px;color:#94A3B8;letter-spacing:.02em}
+.sidebar .ac-name{font-size:12.5px;font-weight:600;color:#0F172A;display:flex;align-items:center;gap:5px;margin-top:1px}
+.sidebar .ac-caret{color:#94A3B8;font-size:10px}
+.sidebar .ac-ava{width:24px;height:24px;border-radius:7px;background:#4F46E5;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}
+.sidebar .dot-live{background:#059669}
+/* 当前Agent 下拉菜单 */
+.ac-menu{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#FFFFFF;border:1px solid #CBD2DC;border-radius:10px;box-shadow:0 10px 30px rgba(15,23,42,.14);z-index:70;display:none;overflow:hidden}
+.ac-menu.open{display:block}
+.acm-head{font-size:10.5px;font-weight:600;color:#94A3B8;padding:9px 12px 5px;letter-spacing:.02em}
+.acm-item{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer}
+.acm-item:hover{background:#F7F8FA}
+.acm-item.on{background:#EEF2FF}
+.acm-ava{width:22px;height:22px;border-radius:6px;background:#EEF2FF;color:#4F46E5;display:grid;place-items:center;font-size:10px;font-weight:700;flex:none}
+.acm-item.on .acm-ava{background:#4F46E5;color:#fff}
+.acm-name{font-size:12px;font-weight:600;color:#0F172A}
+.acm-id{font-size:9.5px;color:#94A3B8;font-family:'JetBrains Mono',monospace;margin-top:1px}
+.acm-check{margin-left:auto;color:#4F46E5;font-size:11px}
+.acm-foot{padding:8px 12px;border-top:1px solid #E4E7EC;color:#4F46E5;font-size:11.5px;cursor:pointer}
+.acm-foot:hover{background:#EEF2FF}
+
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ Sidebar ============ -->
+    <!-- ============ Sidebar ============ -->
+    <!-- ============ Sidebar（浅色） ============ -->
+    <!-- ============ Sidebar（浅色 · 品牌=首页 · 当前Agent下拉） ============ -->
+  <aside class="sidebar">
+    <div class="brand" onclick="location.href='01-agents.html'" style="cursor:pointer">
+      <div class="brand-mark">P</div>
+      <div>
+        <div class="brand-name">AgentStudio</div>
+        <div class="brand-sub">Agent 工作台</div>
+      </div>
+    </div>
+    <div class="agent-ctx" onclick="toggleAgentMenu(event)">
+      <span class="ac-ava">提</span>
+      <div>
+        <div class="ac-name">提前结清 <span class="ac-caret">▾</span></div>
+      </div>
+      <div class="ac-menu" id="acMenu">
+        <div class="acm-head">切换 Agent</div>
+        <div class="acm-item on" onclick="pickAgent(this,event)">
+          <span class="acm-ava">提</span>
+          <div><div class="acm-name">提前结清</div><div class="acm-id mono">onb-094c4bbe2663</div></div>
+          <span class="acm-check">✓</span>
+        </div>
+        <div class="acm-item" onclick="pickAgent(this,event)">
+          <span class="acm-ava">账</span>
+          <div><div class="acm-name">账单查询</div><div class="acm-id mono">onb-second-test</div></div>
+        </div>
+        <div class="acm-foot" onclick="location.href='01-agents.html'">＋ 查看全部 / 创建 Agent</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item" onclick="location.href='02-workbench.html'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Agent 构建
+      </div>
+      <div class="nav-item active" onclick="location.href='05-conversation.html'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        模拟对话
+      </div>
+      <div class="nav-item" onclick="location.href='06-auto-simulation.html'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+        自动仿真
+      </div>
+      <div class="nav-item" onclick="location.href='07-observability.html'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-7"/></svg>
+        追踪与观测
+      </div>
+      <div class="nav-item" onclick="location.href='#'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 1-.4 2.4l2 1.6-2 3.4-2.4-.9a7 7 0 0 1-2.1 1.2L13.7 22h-3.4l-.4-2.3a7 7 0 0 1-2.1-1.2l-2.4.9-2-3.4 2-1.6A7 7 0 0 1 5 12c0-.8.14-1.6.4-2.4l-2-1.6 2-3.4 2.4.9a7 7 0 0 1 2.1-1.2L10.3 2h3.4l.4 2.3a7 7 0 0 1 2.1 1.2l2.4-.9 2 3.4-2 1.6c.26.8.4 1.6.4 2.4z"/></svg>
+        设置
+      </div>
+    </nav>
+    <div class="sidebar-foot"><span class="dot-live"></span> server · v3.3.1 · 运行中</div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <div class="main">
+    <div class="topbar">
+      <button class="tb-toggle" id="sessToggle" title="会话列表">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      </button>
+      <div class="agent-chip">
+        <div class="agent-ava">提</div>
+        <div class="agent-meta">
+          <div class="a-name">提前结清 <span class="pub"></span></div>
+          <div class="a-sub mono">onb-094c4bbe2663</div>
+        </div>
+      </div>
+      <div class="sess-title">会话 · <b>提前结清咨询</b></div>
+      <div class="topbar-right">
+        <button class="trace-btn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          langfuse 链路
+        </button>
+        <button class="btn btn-ghost" onclick="openNew()">新对话</button>
+      </div>
+    </div>
+
+    <div class="body">
+      <!-- sessions sidebar -->
+      <aside class="sess-panel" id="sessPanel">
+        <div class="sess-head">
+          <span class="s-title">会话列表</span>
+          <button class="btn btn-ghost" style="height:26px;padding:0 9px;font-size:11.5px" onclick="openNew()">＋ 新对话</button>
+        </div>
+        <div class="sess-search">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input placeholder="搜索会话…">
+        </div>
+        <div class="sess-list">
+          <button class="sess-item cur">
+            <span class="i-top"><span class="i-title"><span class="live-dot"></span>提前结清咨询</span><span class="i-time">14:04</span></span>
+            <span class="i-prev">经核算，您当前剩余本金 151,000 元…</span>
+            <span class="i-id">hmZ6Gi2RQw</span>
+          </button>
+          <button class="sess-item">
+            <span class="i-top"><span class="i-title"><span class="live-dot"></span>余额与还款计划</span><span class="i-time">13:51</span></span>
+            <span class="i-prev">您的剩余还款计划如下：…</span>
+            <span class="i-id">J4mPqX9zK1</span>
+          </button>
+          <button class="sess-item">
+            <span class="i-top"><span class="i-title">结清金额复核</span><span class="i-time">昨天</span></span>
+            <span class="i-prev">提前结清需支付 156,320.50 元…</span>
+            <span class="i-id">R8wE2uY6tA</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- conversation -->
+      <div class="conversation">
+        <div class="thread">
+          <div class="thread-inner">
+            <div class="turn customer">
+              <div class="who">张先生 · 14:02</div>
+              <div class="bubble">你好，我想提前结清我的车贷。</div>
+            </div>
+            <div class="turn agent">
+              <div class="who">提前结清助手 · 14:02</div>
+              <div class="bubble">您好，我是提前结清助手。请问您想咨询提前结清的哪方面？我可以帮您核算结清金额或查询余额。</div>
+            </div>
+            <div class="turn customer">
+              <div class="who">张先生 · 14:03</div>
+              <div class="bubble">我贷款还剩 8 个月，想看看提前结清要还多少钱。</div>
+            </div>
+            <div class="turn agent">
+              <div class="who">提前结清助手 · 14:03</div>
+              <div class="tool-card open">
+                <div class="tool-head" onclick="this.parentNode.classList.toggle('open')">
+                  <span class="t-icon"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+                  <span class="t-name">calc_prepayment_amount</span>
+                  <span class="t-status"><span style="color:var(--success)">● 成功</span></span>
+                  <span class="chev"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></span>
+                </div>
+                <div class="tool-body">
+                  <div class="tool-row"><div class="k">入参</div><pre>{"order_num": "LN202606180088", "remaining_months": 8}</pre></div>
+                  <div class="tool-row"><div class="k">结果</div><pre>{"total_amount": 156320.5, "principal": 151000, "interest_discount": 320.5, "early_fee": 5000}</pre></div>
+                </div>
+              </div>
+              <div class="bubble">经核算，您当前剩余本金 151,000 元，提前结清需一次性支付 <b>156,320.50 元</b>（含手续费 5,000 元）。需要为您办理结清申请吗？</div>
+              <div class="msg-tools">
+                <a class="trace-link"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>查看链路<span class="tid mono">a1b2c3…</span></a>
+              </div>
+            </div>
+            <div class="turn customer">
+              <div class="who">张先生 · 14:04</div>
+              <div class="bubble">好的，那帮我办理结清申请吧。</div>
+            </div>
+            <div class="turn agent">
+              <div class="who">提前结清助手 · 正在处理</div>
+              <div class="streaming">正在核对您的结清条件 <span class="dots"><i></i><i></i><i></i></span></div>
+              <div class="status-line">
+                <span class="status-chip busy"><span class="s-dot"></span>processing</span>
+                <span class="status-chip"><span class="s-dot"></span>tool_caller</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="composer">
+          <div class="composer-inner">
+            <div class="input-shell">
+              <textarea rows="1" placeholder="输入消息…（Enter 发送，Shift+Enter 换行）"></textarea>
+              <button class="send-btn" disabled><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+            </div>
+            <div class="composer-hint">
+              <span>经由 server SSE 透传 · EventSource</span>
+              <span class="mono" style="margin-left:auto">GET /api/sessions/{id}/events</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- exec rail (collapsible) -->
+      <button class="rail-toggle" id="railToggle" title="折叠/展开执行详情">❯</button>
+      <aside class="rail" id="execRail">
+        <div class="rail-sec">
+          <h4><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>会话状态</h4>
+          <div class="big-status"><span class="s-dot"></span> processing · 引擎处理中</div>
+        </div>
+        <div class="rail-sec">
+          <h4><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 20l-5.45-5.45a2 2 0 0 1 0-2.82l8.49-8.49a2 2 0 0 1 2.82 0l5.45 5.45a2 2 0 0 1 0 2.82l-8.49 8.49a2 2 0 0 1-2.82 0z"/></svg>旅程</h4>
+          <div class="journey-card">
+            <div class="journey-name">提前结清流程</div>
+            <div class="journey-id mono">cabzTvOWjN</div>
+            <div class="jstep done"><div class="track"><span class="dot"></span></div><div class="jbody">接收提前结清意图</div></div>
+            <div class="jstep done"><div class="track"><span class="dot"></span></div><div class="jbody">核算结清金额（工具）</div></div>
+            <div class="jstep cur"><div class="track"><span class="dot"></span></div><div class="jbody">确认办理结清申请</div></div>
+          </div>
+        </div>
+        <div class="rail-sec">
+          <h4><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>本次已匹配</h4>
+          <div class="matched-item"><span class="gid mono">gdl_6qMSri</span>完成核心业务交互后，用户提出结束对话或不再联系的要求时，祝福并结束</div>
+          <div class="matched-item"><span class="gid mono">gdl_4k9xF2</span>用户表达提前结清意愿时，先核算结清金额并给出明细</div>
+        </div>
+        <div class="rail-sec">
+          <h4><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>执行链路</h4>
+          <div class="trace-box">本次回复链路（langfuse）
+            <span class="tid mono">a1b2c3d4e5f60718293a4b5c6d7e8f90</span>
+            <span style="opacity:.8;font-size:11px">process → guideline_matcher → tool_caller → message_generation</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ============ New conversation dialog ============ -->
+  <div class="dialog-backdrop" id="newDialog" style="display:none">
+    <div class="dialog">
+      <button class="dialog-close" onclick="closeNew()">✕</button>
+      <h3>开始新对话</h3>
+      <div class="d-sub">选择 Agent 与客户身份 → 打开模拟对话窗口（POST /api/customers → POST /api/sessions）</div>
+      <div class="d-sub" style="margin-bottom:10px;font-weight:600;color:var(--ink-2)">1 · 选择 Agent</div>
+      <div class="agent-opt sel">
+        <div class="radio"></div>
+        <div style="flex:1"><div class="ao-name">提前结清 <span class="pub" style="width:6px;height:6px;border-radius:50%;background:var(--success);display:inline-block"></span></div><div class="ao-id">onb-094c4bbe2663</div><div class="ao-desc">车贷提前结清业务 · 6 指南 / 1 旅程 / 3 工具</div></div>
+      </div>
+      <div class="agent-opt">
+        <div class="radio"></div>
+        <div style="flex:1"><div class="ao-name">账单查询</div><div class="ao-id">onb-second-test</div><div class="ao-desc">账单与还款计划查询</div></div>
+      </div>
+      <div class="d-sub" style="margin:16px 0 6px;font-weight:600;color:var(--ink-2)">2 · 客户身份</div>
+      <div class="field">
+        <label>客户 ID <span class="req">*</span></label>
+        <input class="input mono" value="cust_20260922_001">
+        <span class="hint">作为 customer_id；可用内置 <b>guest</b> 快速冒烟</span>
+      </div>
+      <div class="field">
+        <label>姓名</label>
+        <input class="input" value="张先生">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+        <div class="field"><label>业务字段</label><div class="switch-row"><div class="switch on"></div><span style="font-size:12px">敏感身份</span></div></div>
+        <div class="field"><label>订单号</label><input class="input mono" value="LN202606180088"></div>
+      </div>
+      <div class="d-footer">
+        <button class="btn btn-ghost" onclick="closeNew()">取消</button>
+        <div class="spacer"></div>
+        <button class="btn btn-primary" onclick="closeNew()">开始对话</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+function openNew(){document.getElementById('newDialog').style.display='grid'}
+function closeNew(){document.getElementById('newDialog').style.display='none'}
+// 会话边栏收起/展开
+var sessCollapsed=false;
+document.getElementById('sessToggle').addEventListener('click',function(){
+  sessCollapsed=!sessCollapsed;
+  document.getElementById('sessPanel').classList.toggle('collapsed',sessCollapsed);
+});
+// 执行详情折叠/展开
+var railCollapsed=false;
+document.getElementById('railToggle').addEventListener('click',function(){
+  railCollapsed=!railCollapsed;
+  document.getElementById('execRail').classList.toggle('collapsed',railCollapsed);
+  this.textContent=railCollapsed?'❮':'❯';
+});
+</script>
+
+<script>
+function toggleAgentMenu(e){e=e||window.event;if(e)e.stopPropagation();var m=document.getElementById('acMenu');if(m)m.classList.toggle('open')}
+function pickAgent(el,e){e=e||window.event;if(e)e.stopPropagation();
+  document.querySelectorAll('.acm-item').forEach(function(i){i.classList.remove('on')});el.classList.add('on');
+  var name=el.querySelector('.acm-name').textContent, id=el.querySelector('.acm-id').textContent;
+  var ctx=document.getElementById('acMenu').closest('.agent-ctx');
+  ctx.querySelector('.ac-ava').textContent=name[0];
+  ctx.querySelector('.ac-name').firstChild.textContent=name+' ';
+  document.getElementById('acMenu').classList.remove('open')}
+document.addEventListener('click',function(){var m=document.getElementById('acMenu');if(m)m.classList.remove('open')});
+</script>
+
+</body>
+</html>

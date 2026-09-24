@@ -1,0 +1,44 @@
+[project]
+name = "parlant-agent-runtime"
+version = "0.1.0"
+description = "Parlant agent execution runtime: loads agents from agent-definition.json and schedules the AlphaEngine; internal service facing parlant-agent-server (BFF), not frontend"
+requires-python = ">=3.11"
+dependencies = [
+    # parlant 本体由下方 [tool.uv.sources] 指向 ../parlant 本地 editable 安装；
+    # 不走 parlant[litellm] extra（其 torch>=2.8 无 macOS x86_64 wheel，Intel 机器装不上），
+    # litellm 直装即可；本地源码已把 JinaAIEmbedder 改为惰性导入，运行期无需 torch。
+    "parlant==3.3.1",
+    "litellm>=1.83.10",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "motor>=3.5",          # MongoDB async driver（阶段2 定义层/文档库）
+    "qdrant-client>=1.11", # 向量库接入（阶段2 检索器）
+    "opentelemetry-instrumentation-fastapi>=0.58b0", # /internal/* 端点追踪（对齐 parlant 的 otel 1.37/0.58b0）
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+# 本地 parlant 源码 editable 安装（相对本 pyproject 所在目录）
+parlant = { path = "../../parlant", editable = true }
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

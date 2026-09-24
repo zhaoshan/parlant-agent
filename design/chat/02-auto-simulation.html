@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自动仿真 · AgentStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sidebar:#0B1220; --sidebar-ink:#CBD5E1; --sidebar-dim:#64748B;
+  --bg:#F7F8FA; --surface:#FFFFFF; --line:#E4E7EC; --line-strong:#CBD2DC;
+  --ink:#0F172A; --ink-2:#475569; --muted:#94A3B8;
+  --primary:#4F46E5; --primary-weak:#EEF2FF; --primary-line:#C7D2FE;
+  --success:#059669; --success-weak:#ECFDF5;
+  --warning:#B45309; --warning-weak:#FFFBEB;
+  --danger:#DC2626;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{display:flex;min-height:100vh}
+.sidebar{width:224px;background:var(--sidebar);color:var(--sidebar-ink);display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;border-bottom:1px solid #1E293B}
+.brand-mark{width:26px;height:26px;border-radius:7px;background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:none}
+.brand-name{font-size:13px;font-weight:600;color:#F1F5F9;line-height:1.2}
+.brand-sub{font-size:10.5px;color:var(--sidebar-dim)}
+.nav{padding:10px 8px;flex:1}
+.nav-group{font-size:10.5px;color:var(--sidebar-dim);padding:10px 10px 5px;letter-spacing:.02em}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;color:var(--sidebar-ink);cursor:pointer;font-size:13px}
+.nav-item svg{flex:none;opacity:.75}
+.nav-item:hover{background:#151F33}
+.nav-item.active{background:#1E293B;color:#fff}
+.nav-item.active svg{opacity:1;color:#A5B4FC}
+.nav-item .count{margin-left:auto;font-size:11px;color:var(--sidebar-dim);background:#151F33;border-radius:10px;padding:1px 7px}
+.sidebar-foot{padding:10px 16px;border-top:1px solid #1E293B;font-size:11.5px;color:var(--sidebar-dim);display:flex;align-items:center;gap:8px}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--success)}
+
+.main{margin-left:224px;flex:1;min-width:0}
+.topbar{height:52px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:10}
+.crumb{font-size:13px;color:var(--muted)}
+.crumb b{color:var(--ink);font-weight:600}
+.topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.content{padding:24px;max-width:1080px;margin:0 auto}
+
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+.page-title{font-size:19px;font-weight:600;letter-spacing:-.01em}
+.page-desc{color:var(--ink-2);font-size:12.5px;margin-top:3px}
+.run-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;background:var(--success-weak);color:var(--success);border-radius:6px;padding:5px 11px}
+.run-badge .r-dot{width:7px;height:7px;border-radius:50%;background:var(--success);animation:blink 1.2s infinite}
+@keyframes blink{0%,80%,100%{opacity:.25}40%{opacity:1}}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:16px}
+.card h3{font-size:13.5px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:7px}
+.card .c-sub{font-size:11.5px;color:var(--muted);margin-bottom:14px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr 120px 120px;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:12px;font-weight:500;color:var(--ink-2)}
+.field .hint{font-size:11px;color:var(--muted)}
+.input{height:34px;border:1px solid var(--line-strong);border-radius:7px;padding:0 11px;font-size:12.5px;font-family:inherit;color:var(--ink);outline:0;width:100%}
+.input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak)}
+.input.mono{font-family:'JetBrains Mono',monospace}
+.textarea{border:1px solid var(--line-strong);border-radius:7px;padding:9px 11px;font-size:12.5px;font-family:inherit;color:var(--ink);outline:0;width:100%;min-height:76px;resize:vertical;line-height:1.55}
+.textarea:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak)}
+.field.full{grid-column:1/-1}
+.form-actions{display:flex;align-items:center;gap:10px;margin-top:16px}
+.form-actions .spacer{flex:1}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:7px;font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid transparent;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#4338CA}
+.btn-ghost{background:var(--surface);border-color:var(--line-strong);color:var(--ink-2)}
+.btn-ghost:hover{background:#F1F5F9;color:var(--ink)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{background:#B91C1C}
+
+/* progress */
+.progress-card{display:flex;align-items:center;gap:16px}
+.progress-ring{width:58px;height:58px;flex:none;position:relative}
+.progress-ring svg{transform:rotate(-90deg)}
+.progress-ring .pr-num{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.progress-meta{flex:1}
+.progress-meta .pm-title{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:8px}
+.progress-meta .pm-title b{color:var(--ink);font-size:13px}
+.progress-meta .pm-bar{height:6px;background:var(--bg);border-radius:3px;margin-top:9px;overflow:hidden}
+.progress-meta .pm-bar i{display:block;height:100%;width:60%;background:var(--primary);border-radius:3px}
+.progress-meta .pm-sub{font-size:11px;color:var(--muted);margin-top:6px}
+.progress-stats{display:flex;gap:10px}
+.pstat{text-align:center;background:var(--bg);border-radius:8px;padding:8px 14px}
+.pstat .v{font-size:16px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.pstat .k{font-size:10.5px;color:var(--muted);margin-top:2px}
+
+/* turn log */
+.turn-log{font-family:'JetBrains Mono',monospace;font-size:11.5px}
+.tl-row{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);align-items:flex-start}
+.tl-row:last-child{border-bottom:0}
+.tl-no{color:var(--muted);flex:none;width:26px;padding-top:2px}
+.tl-body{flex:1;min-width:0}
+.tl-body .tl-who{font-size:10.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.tl-body .tl-who .who-in{color:var(--ink-2);font-weight:600}
+.tl-body .tl-who .who-out{color:var(--primary);font-weight:600}
+.tl-body .tl-text{font-family:'IBM Plex Sans',system-ui,sans-serif;font-size:12.5px;line-height:1.6;color:var(--ink);margin-top:3px;white-space:pre-wrap}
+.tl-body .tl-trace{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--primary);margin-top:5px;cursor:pointer;font-family:'JetBrains Mono',monospace}
+.tl-meta{margin-left:auto;flex:none;display:flex;gap:8px;align-items:center}
+.tl-meta .t-tools{font-size:10.5px;color:var(--success);background:var(--success-weak);border-radius:4px;padding:1px 6px}
+.tl-meta .t-time{font-size:10.5px;color:var(--muted)}
+.end-reason{display:flex;align-items:center;gap:8px;background:var(--warning-weak);color:var(--warning);border-radius:8px;padding:9px 12px;font-size:12px;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div>
+        <div class="brand-name">AgentStudio</div>
+        <div class="brand-sub">Agent 配置与仿真</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">AgentStudio</div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+        Agents <span class="count">4</span>
+      </div>
+      <div class="nav-group">仿真</div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        对话仿真
+      </div>
+      <div class="nav-item active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+        自动仿真
+      </div>
+      <div class="nav-group">观测</div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-7"/></svg>
+        追踪与观测
+      </div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 1-.4 2.4l2 1.6-2 3.4-2.4-.9a7 7 0 0 1-2.1 1.2L13.7 22h-3.4l-.4-2.3a7 7 0 0 1-2.1-1.2l-2.4.9-2-3.4 2-1.6A7 7 0 0 1 5 12c0-.8.14-1.6.4-2.4l-2-1.6 2-3.4 2.4.9a7 7 0 0 1 2.1-1.2L10.3 2h3.4l.4 2.3a7 7 0 0 1 2.1 1.2l2.4-.9 2 3.4-2 1.6c.26.8.4 1.6.4 2.4z"/></svg>
+        设置
+      </div>
+    </nav>
+    <div class="sidebar-foot"><span class="dot-live"></span> server · v3.3.1 · 运行中</div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">仿真 / <b>自动仿真</b></div>
+      <div class="topbar-right">
+        <span class="run-badge"><span class="r-dot"></span>运行中 · run_20260922_1405</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- config -->
+      <div class="card">
+        <h3>仿真配置</h3>
+        <div class="c-sub">后台程序模拟客户，按 Agent 回复自动生成下一问，循环 N 轮（实现：脚本 → POST /api/sessions → SSE 订阅 → 生成下一问 → 再发）</div>
+        <div class="form-grid">
+          <div class="field">
+            <label>Agent</label>
+            <input class="input mono" value="onb-094c4bbe2663" readonly>
+            <span class="hint">已发布 / 加载中的 Agent</span>
+          </div>
+          <div class="field">
+            <label>客户画像脚本</label>
+            <textarea class="textarea">一位计划提前结清车贷的客户。性格：直接、关心费用明细。
+首句：你好，我想提前结清车贷。</textarea>
+          </div>
+          <div class="field">
+            <label>最大轮次</label>
+            <input class="input mono" value="5">
+          </div>
+          <div class="field">
+            <label>轮次间隔 (s)</label>
+            <input class="input mono" value="2">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-danger">停止</button>
+          <div class="spacer"></div>
+          <span style="font-size:11.5px;color:var(--muted)">上次运行 2 分钟前 · 5 轮 / 3 工具调用</span>
+          <button class="btn btn-primary">开始仿真</button>
+        </div>
+      </div>
+
+      <!-- progress -->
+      <div class="card progress-card">
+        <div class="progress-ring">
+          <svg width="58" height="58" viewBox="0 0 58 58"><circle cx="29" cy="29" r="25" fill="none" stroke="#E4E7EC" stroke-width="6"/><circle cx="29" cy="29" r="25" fill="none" stroke="#4F46E5" stroke-width="6" stroke-dasharray="157" stroke-dashoffset="63" stroke-linecap="round"/></svg>
+          <div class="pr-num">3/5</div>
+        </div>
+        <div class="progress-meta">
+          <div class="pm-title">run_20260922_1405 · 第 <b>3</b> 轮对话进行中</div>
+          <div class="pm-bar"><i></i></div>
+          <div class="pm-sub">预计剩余约 2 轮 · 每轮含 1 次引擎处理（guideline_matcher → tool_caller → message_generation）</div>
+        </div>
+        <div class="progress-stats">
+          <div class="pstat"><div class="v">3</div><div class="k">完成轮次</div></div>
+          <div class="pstat"><div class="v">2</div><div class="k">工具调用</div></div>
+          <div class="pstat"><div class="v">12</div><div class="k">生成提问</div></div>
+        </div>
+      </div>
+
+      <!-- turn log -->
+      <div class="card">
+        <h3>逐轮日志</h3>
+        <div class="c-sub">每轮：客户提问（自动生成）→ Agent 回复；可逐轮跳转 langfuse 链路（依赖每轮 trace_id 记录）</div>
+        <div class="turn-log">
+          <div class="tl-row">
+            <span class="tl-no">#1</span>
+            <div class="tl-body">
+              <div class="tl-who"><span class="who-in">客户(自动)</span><span>→</span><span class="who-out">Agent</span></div>
+              <div class="tl-text">你好，我想提前结清车贷。</div>
+              <span class="tl-trace">⛓ 链路 trace_7f3a…</span>
+            </div>
+            <div class="tl-meta"><span class="t-tools">1 工具</span><span class="t-time">14:05:01</span></div>
+          </div>
+          <div class="tl-row">
+            <span class="tl-no">#2</span>
+            <div class="tl-body">
+              <div class="tl-who"><span class="who-in">客户(自动)</span><span>→</span><span class="who-out">Agent</span></div>
+              <div class="tl-text">好的，那提前结清需要支付多少钱？包含哪些费用？</div>
+              <span class="tl-trace">⛓ 链路 trace_8b12…</span>
+            </div>
+            <div class="tl-meta"><span class="t-tools">1 工具</span><span class="t-time">14:05:09</span></div>
+          </div>
+          <div class="tl-row">
+            <span class="tl-no">#3</span>
+            <div class="tl-body">
+              <div class="tl-who"><span class="who-in">客户(自动)</span><span>→</span><span class="who-out">Agent</span></div>
+              <div class="tl-text">如果我现在申请，多久能完成结清？</div>
+              <span class="tl-trace" style="color:var(--muted);cursor:wait">⛓ 链路生成中…</span>
+            </div>
+            <div class="tl-meta"><span class="t-time">14:05:17</span></div>
+          </div>
+        </div>
+        <div class="end-reason">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+          运行结束条件：达到最大轮次 / 客户画像完成目标 / Agent 明确结束对话时自动停止（后续可加）。
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

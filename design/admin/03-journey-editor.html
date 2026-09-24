@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>旅程编辑器 · 提前结清流程 · AgentStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sidebar:#0B1220; --sidebar-ink:#CBD5E1; --sidebar-dim:#64748B;
+  --bg:#F7F8FA; --surface:#FFFFFF; --line:#E4E7EC; --line-strong:#CBD2DC;
+  --ink:#0F172A; --ink-2:#475569; --muted:#94A3B8;
+  --primary:#4F46E5; --primary-weak:#EEF2FF; --primary-line:#C7D2FE;
+  --success:#059669; --success-weak:#ECFDF5;
+  --warning:#B45309; --warning-weak:#FFFBEB;
+  --danger:#DC2626;
+  --c-fork:#B45309; --c-tool:#059669; --c-chat:#4F46E5; --c-entry:#334155;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{display:flex;min-height:100vh}
+
+/* ---------- Sidebar ---------- */
+.sidebar{width:200px;background:var(--sidebar);color:var(--sidebar-ink);display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;border-bottom:1px solid #1E293B}
+.brand-mark{width:26px;height:26px;border-radius:7px;background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:none}
+.brand-name{font-size:13px;font-weight:600;color:#F1F5F9;line-height:1.2}
+.brand-sub{font-size:10.5px;color:var(--sidebar-dim)}
+.nav{padding:10px 8px;flex:1}
+.nav-group{font-size:10.5px;color:var(--sidebar-dim);padding:10px 10px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;color:var(--sidebar-ink);cursor:pointer;font-size:13px}
+.nav-item svg{flex:none;opacity:.75}
+.nav-item:hover{background:#151F33}
+.nav-item.active{background:#1E293B;color:#fff}
+.nav-item.active svg{opacity:1;color:#A5B4FC}
+.sidebar-foot{padding:10px 16px;border-top:1px solid #1E293B;font-size:11.5px;color:var(--sidebar-dim);display:flex;align-items:center;gap:8px}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--success)}
+
+.main{margin-left:200px;flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* ---------- Agent 上下文栏 ---------- */
+.ctxbar{height:56px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 20px;gap:12px}
+.back{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--muted);cursor:pointer}
+.back:hover{background:#EDF0F4;color:var(--ink)}
+.agent-name{font-size:14px;font-weight:600}
+.agent-id{font-size:11px;color:var(--muted)}
+.badge{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap}
+.badge .b-dot{width:6px;height:6px;border-radius:50%}
+.badge.dirty{background:var(--warning-weak);color:var(--warning)}
+.badge.dirty .b-dot{background:var(--warning)}
+.badge.ver{background:#F1F5F9;color:var(--ink-2)}
+.ctxbar .actions{margin-left:auto;display:flex;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:7px;font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid transparent;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#4338CA}
+.btn-ghost{background:var(--surface);border-color:var(--line-strong);color:var(--ink-2)}
+.btn-ghost:hover{background:#F1F5F9;color:var(--ink)}
+
+/* ---------- 工作台 ---------- */
+.workbench{flex:1;display:flex;min-height:0}
+.comp-nav{width:196px;background:var(--surface);border-right:1px solid var(--line);padding:10px 8px;overflow-y:auto;flex:none}
+.comp-nav .group{font-size:10.5px;color:var(--muted);padding:8px 10px 4px}
+.comp-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;cursor:pointer;color:var(--ink-2);font-size:12.5px}
+.comp-item:hover{background:#F1F5F9}
+.comp-item.on{background:var(--primary-weak);color:var(--primary);font-weight:500}
+.comp-item .n{margin-left:auto;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.comp-item.on .n{color:var(--primary)}
+
+/* ---------- 画布区 ---------- */
+.canvas-wrap{flex:1;display:flex;flex-direction:column;min-width:0}
+.j-toolbar{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.j-title{font-size:13px;font-weight:600}
+.j-id{font-size:10.5px;color:var(--muted)}
+.j-status{font-size:11px;color:var(--success);background:var(--success-weak);border-radius:5px;padding:2px 7px;font-weight:500}
+.toolbar-sep{width:1px;height:18px;background:var(--line-strong);margin:0 4px}
+.j-toolbar .spacer{flex:1}
+.btn-sm{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-2);font-family:inherit}
+.btn-sm:hover{background:#F1F5F9;color:var(--ink)}
+.btn-sm.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn-sm.primary:hover{background:#4338CA}
+.btn-sm.warn{color:var(--warning);border-color:#FDE68A;background:var(--warning-weak)}
+
+.canvas-scroll{flex:1;overflow:auto;background:#FAFBFC;background-image:radial-gradient(#D7DCE4 1px, transparent 1px);background-size:22px 22px;position:relative}
+.canvas{position:relative;width:1300px;height:820px}
+
+/* SVG 边 */
+.edge{fill:none;stroke:#94A3B8;stroke-width:1.6}
+.edge-label{position:absolute;transform:translate(-50%,-50%);background:#fff;border:1px solid var(--line-strong);border-radius:5px;padding:2px 7px;font-size:10.5px;color:var(--ink-2);white-space:nowrap;font-family:'JetBrains Mono',monospace;box-shadow:0 1px 2px rgba(15,23,42,.05)}
+.edge-label b{color:var(--primary);font-weight:600}
+
+/* 节点 */
+.node{position:absolute;width:182px;background:#fff;border:1px solid var(--line-strong);border-radius:9px;cursor:pointer;box-shadow:0 1px 3px rgba(15,23,42,.07);transition:box-shadow .12s}
+.node:hover{box-shadow:0 3px 10px rgba(15,23,42,.13)}
+.node.sel{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-weak),0 3px 10px rgba(15,23,42,.13)}
+.node .bar{height:4px;border-radius:9px 9px 0 0}
+.node.chat .bar{background:var(--c-chat)}
+.node.tool .bar{background:var(--c-tool)}
+.node.fork .bar{background:var(--c-fork)}
+.node.entry .bar{background:var(--c-entry)}
+.node-body{padding:8px 11px 9px}
+.node-kind{display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:.03em}
+.node.chat .node-kind{color:var(--c-chat)}
+.node.tool .node-kind{color:var(--c-tool)}
+.node.fork .node-kind{color:var(--c-fork)}
+.node.entry .node-kind{color:var(--c-entry)}
+.node-title{font-size:12.5px;font-weight:600;margin-top:3px;line-height:1.35}
+.node-id{font-size:10px;color:var(--muted);margin-top:2px}
+.node-term{position:absolute;right:9px;bottom:8px;width:7px;height:7px;border-radius:50%;background:#CBD5E1}
+
+/* 校验条 */
+.validate-bar{display:flex;align-items:center;gap:8px;padding:7px 14px;background:var(--warning-weak);border-top:1px solid #FDE68A;font-size:12px;color:var(--warning)}
+.validate-bar .va{font-size:11px;font-weight:600;background:#FDE68A;color:#92400E;border-radius:4px;padding:1px 7px}
+.validate-bar .msg b{font-weight:600}
+.validate-bar .close{margin-left:auto;cursor:pointer;color:#92400E;opacity:.6}
+
+/* ---------- 检查器 ---------- */
+.insp{width:330px;background:var(--surface);border-left:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto;flex:none}
+.insp-head{padding:12px 16px 10px;border-bottom:1px solid var(--line)}
+.insp-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.insp-id{font-size:10.5px;color:var(--muted);margin-top:2px}
+.kind-chip{font-size:10px;font-weight:600;border-radius:4px;padding:2px 7px;letter-spacing:.03em}
+.kind-chip.chat{background:var(--primary-weak);color:var(--c-chat)}
+.kind-chip.tool{background:var(--success-weak);color:var(--c-tool)}
+.kind-chip.fork{background:var(--warning-weak);color:var(--c-fork)}
+.fld{padding:11px 16px;border-bottom:1px solid var(--line)}
+.fld-label{font-size:11.5px;font-weight:500;color:var(--ink-2);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.fld-label .hint{color:var(--muted);font-weight:400;font-size:11px}
+.inp{width:100%;height:30px;border:1px solid var(--line-strong);border-radius:7px;padding:0 9px;font-size:12.5px;font-family:inherit;color:var(--ink);background:#fff}
+.ta{width:100%;border:1px solid var(--line-strong);border-radius:7px;padding:8px 10px;font-size:12px;line-height:1.55;font-family:inherit;color:var(--ink);background:#FBFBFC;resize:vertical}
+.txn{display:flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;margin-bottom:6px;font-size:11.5px;background:#FBFBFC}
+.txn .cond{flex:1;color:var(--ink-2)}
+.txn code{font-family:'JetBrains Mono',monospace;font-size:10.5px;background:#F1F5F9;padding:1px 5px;border-radius:4px;color:var(--ink-2);white-space:nowrap}
+.txn .arr{color:var(--muted);flex:none}
+.add-dashed{border:1px dashed var(--line-strong);border-radius:7px;padding:6px;text-align:center;font-size:11.5px;color:var(--muted);cursor:pointer}
+.add-dashed:hover{background:#F8FAFC;color:var(--ink-2)}
+.insp-foot{margin-top:auto;padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;background:#FBFCFD}
+</style>
+</head>
+<body>
+<div class="app">
+    <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div>
+        <div class="brand-name">AgentStudio</div>
+        <div class="brand-sub">Agent 配置与仿真</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">AgentStudio</div>
+      <div class="nav-item active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+        Agents <span class="count">4</span>
+      </div>
+      <div class="nav-group">仿真</div>
+      <div class="nav-item" onclick="location.href=\'../chat/01-conversation.html\'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        对话仿真
+      </div>
+      <div class="nav-item" onclick="location.href=\'../chat/02-auto-simulation.html\'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+        自动仿真
+      </div>
+      <div class="nav-group">观测</div>
+      <div class="nav-item" onclick="location.href=\'../chat/03-observability.html\'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-7"/></svg>
+        追踪与观测
+      </div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 1-.4 2.4l2 1.6-2 3.4-2.4-.9a7 7 0 0 1-2.1 1.2L13.7 22h-3.4l-.4-2.3a7 7 0 0 1-2.1-1.2l-2.4.9-2-3.4 2-1.6A7 7 0 0 1 5 12c0-.8.14-1.6.4-2.4l-2-1.6 2-3.4 2.4.9a7 7 0 0 1 2.1-1.2L10.3 2h3.4l.4 2.3a7 7 0 0 1 2.1 1.2l2.4-.9 2 3.4-2 1.6c.26.8.4 1.6.4 2.4z"/></svg>
+        设置
+      </div>
+    </nav>
+    <div class="sidebar-foot"><span class="dot-live"></span> server · v3.3.1 · 运行中</div>
+  </aside>
+
+  <div class="main">
+    <div class="ctxbar">
+      <span class="back"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></span>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="agent-name">提前结清（测试样板）</span>
+          <span class="badge dirty"><span class="b-dot"></span>3 处未发布更改</span>
+          <span class="badge ver mono">v1.0.0</span>
+        </div>
+        <div class="agent-id mono">onb-094c4bbe2663 · 上次保存 10 分钟前</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost">导出 JSON</button>
+        <button class="btn btn-ghost">试跑</button>
+        <button class="btn btn-ghost">保存草稿</button>
+        <button class="btn btn-primary">发布新版本</button>
+      </div>
+    </div>
+
+    <div class="workbench">
+      <nav class="comp-nav">
+        <div class="group">Agent 定义</div>
+        <div class="comp-item">基础信息</div>
+        <div class="comp-item">边界与开场白</div>
+        <div class="group">上下文工程组件</div>
+        <div class="comp-item">指南 <span class="n">6</span></div>
+        <div class="comp-item on">旅程 <span class="n">1</span></div>
+        <div class="comp-item">变量 <span class="n">6</span></div>
+        <div class="comp-item">术语表 <span class="n">1</span></div>
+        <div class="comp-item">预设话术 <span class="n">2</span></div>
+        <div class="comp-item">工具 <span class="n">3</span></div>
+        <div class="comp-item">检索器 <span class="n">2</span></div>
+        <div class="group">高级</div>
+        <div class="comp-item">关系 <span class="n">0</span></div>
+        <div class="comp-item">观察 <span class="n">0</span></div>
+      </nav>
+
+      <!-- 画布 -->
+      <section class="canvas-wrap">
+        <div class="j-toolbar">
+          <span class="j-title">提前结清流程</span>
+          <span class="j-id mono">jny_LuAwQZ · main</span>
+          <span class="j-status">alive</span>
+          <div class="toolbar-sep"></div>
+          <button class="btn-sm">+ Chat 状态</button>
+          <button class="btn-sm">+ Tool 状态</button>
+          <button class="btn-sm">+ Fork 分支</button>
+          <div class="toolbar-sep"></div>
+          <button class="btn-sm">自动布局</button>
+          <div class="spacer"></div>
+          <button class="btn-sm warn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+            2 警告
+          </button>
+          <button class="btn-sm">100%</button>
+        </div>
+
+        <div class="canvas-scroll">
+          <div class="canvas">
+            <svg width="1300" height="820" style="position:absolute;top:0;left:0">
+              <defs>
+                <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                  <path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/>
+                </marker>
+              </defs>
+              <!-- entry → 敏感/无合同/选择合同 -->
+              <path class="edge" d="M110,300 L110,158" marker-end="url(#arr)"/>
+              <path class="edge" d="M110,368 L110,514" marker-end="url(#arr)"/>
+              <path class="edge" d="M202,334 L266,334" marker-end="url(#arr)"/>
+              <!-- 选择合同 → 判定 -->
+              <path class="edge" d="M452,334 L516,334" marker-end="url(#arr)"/>
+              <!-- 判定 → 已预约/挽留/不满足 -->
+              <path class="edge" d="M612,300 C 612,180 690,126 762,126" marker-end="url(#arr)"/>
+              <path class="edge" d="M702,334 L766,334" marker-end="url(#arr)"/>
+              <path class="edge" d="M612,368 C 612,488 690,542 762,542" marker-end="url(#arr)"/>
+              <!-- 挽留 → 同意挽留 / 次数计算 -->
+              <path class="edge" d="M858,300 L858,158" marker-end="url(#arr)"/>
+              <path class="edge" d="M946,334 L1012,334" marker-end="url(#arr)"/>
+              <!-- 次数计算 → 挽留(返回) / 预约办理 -->
+              <path class="edge" d="M1016,312 C 996,238 972,238 950,312" marker-end="url(#arr)"/>
+              <path class="edge" d="M1110,368 L1110,514" marker-end="url(#arr)"/>
+              <!-- 预约办理 → 同意预约 -->
+              <path class="edge" d="M1110,582 L1110,692" marker-end="url(#arr)"/>
+            </svg>
+
+            <!-- 边标签 -->
+            <div class="edge-label" style="left:110px;top:229px"><b>isSensitive</b> = true</div>
+            <div class="edge-label" style="left:110px;top:441px">orderNum = 0</div>
+            <div class="edge-label" style="left:234px;top:316px">选择后</div>
+            <div class="edge-label" style="left:484px;top:316px">选定合同</div>
+            <div class="edge-label" style="left:688px;top:150px">isEligible ∧ isbook</div>
+            <div class="edge-label" style="left:700px;top:283px">isEligible ∧ ¬isbook</div>
+            <div class="edge-label" style="left:688px;top:518px">¬isEligible</div>
+            <div class="edge-label" style="left:858px;top:229px">同意挽留</div>
+            <div class="edge-label" style="left:979px;top:316px">拒绝挽留</div>
+            <div class="edge-label" style="left:984px;top:262px">拒绝 &lt; 2 · 返回</div>
+            <div class="edge-label" style="left:1124px;top:441px">拒绝 ≥ 2</div>
+            <div class="edge-label" style="left:1124px;top:637px">同意预约</div>
+
+            <!-- 节点 -->
+            <div class="node entry" style="left:20px;top:302px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">◈ ENTRY · FORK</div>
+                <div class="node-title">身份核验与合同数量判定</div>
+                <div class="node-id mono">sta_4h4nEZ</div>
+              </div>
+            </div>
+            <div class="node chat" style="left:20px;top:90px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">敏感身份</div>
+                <div class="node-id mono">sta_87qC5m</div>
+              </div>
+              <span class="node-term"></span>
+            </div>
+            <div class="node chat" style="left:20px;top:520px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">客户名下无合同</div>
+                <div class="node-id mono">sta_kCM1ob</div>
+              </div>
+              <span class="node-term"></span>
+            </div>
+            <div class="node chat" style="left:270px;top:302px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">选择要办理的合同</div>
+                <div class="node-id mono">sta_PwWIUu</div>
+              </div>
+            </div>
+            <div class="node fork" style="left:520px;top:302px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">◈ FORK</div>
+                <div class="node-title">判断选中合同情况</div>
+                <div class="node-id mono">sta_3jNGRI</div>
+              </div>
+            </div>
+            <div class="node chat" style="left:770px;top:90px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">已经办理预约</div>
+                <div class="node-id mono">sta_f9cvmv</div>
+              </div>
+              <span class="node-term"></span>
+            </div>
+            <div class="node chat sel" style="left:770px;top:302px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">挽留</div>
+                <div class="node-id mono">sta_2CzzvY</div>
+              </div>
+            </div>
+            <div class="node chat" style="left:770px;top:520px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">不满足办理条件</div>
+                <div class="node-id mono">sta_Lj5AhD</div>
+              </div>
+              <span class="node-term"></span>
+            </div>
+            <div class="node tool" style="left:1020px;top:302px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">⚙ TOOL</div>
+                <div class="node-title">挽留次数计算</div>
+                <div class="node-id mono">sta_N4xD0A · journey_node_counter</div>
+              </div>
+            </div>
+            <div class="node chat" style="left:1020px;top:520px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">预约办理</div>
+                <div class="node-id mono">sta_J04Tro</div>
+              </div>
+            </div>
+            <div class="node chat" style="left:1020px;top:90px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">客户同意挽留</div>
+                <div class="node-id mono">sta_njUq9v</div>
+              </div>
+              <span class="node-term"></span>
+            </div>
+            <div class="node chat" style="left:1020px;top:696px">
+              <div class="bar"></div>
+              <div class="node-body">
+                <div class="node-kind">CHAT</div>
+                <div class="node-title">客户同意预约</div>
+                <div class="node-id mono">sta_ENoopJ</div>
+              </div>
+              <span class="node-term"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 校验条 -->
+        <div class="validate-bar">
+          <span class="va">2 警告</span>
+          <span class="msg"><b>sta_J04Tro（预约办理）</b>只有"同意预约"一条出边，客户拒绝预约时无分支 — 建议补充转移或绑定兜底指南 <b>gdl_0EKSTn</b></span>
+          <span class="close">×</span>
+        </div>
+      </section>
+
+      <!-- 检查器 -->
+      <aside class="insp">
+        <div class="insp-head">
+          <div class="insp-title">状态配置 <span class="kind-chip chat">CHAT</span></div>
+          <div class="insp-id mono">sta_2CzzvY · 提前结清流程</div>
+        </div>
+
+        <div class="fld">
+          <div class="fld-label">标题</div>
+          <input class="inp" value="挽留">
+        </div>
+        <div class="fld">
+          <div class="fld-label">描述</div>
+          <input class="inp" value="客户满足办理条件，需要进行挽留">
+        </div>
+        <div class="fld">
+          <div class="fld-label">对话指令 Chat State <span class="hint">进入状态时生成回复的依据</span></div>
+          <textarea class="ta" rows="5">告知客户挽留话术，从下列话术中选择：
+"亲亲，一次性全部结清还款压力很大，按期还款还可以为您积累信用，赢得更多提额机会。建议您继续按期还款呢"
+"亲亲，按期还款负担最小，建议您再考虑一下呢"</textarea>
+        </div>
+
+        <div class="fld">
+          <div class="fld-label">转移 Transitions <span class="hint">2 条</span></div>
+          <div class="txn">
+            <span class="cond">客户拒绝挽留</span>
+            <span class="arr">→</span>
+            <code>sta_N4xD0A</code>
+          </div>
+          <div class="txn">
+            <span class="cond">客户同意挽留</span>
+            <span class="arr">→</span>
+            <code>sta_njUq9v</code>
+          </div>
+          <div class="add-dashed">+ 添加转移</div>
+        </div>
+
+        <div class="fld">
+          <div class="fld-label">进入时更新变量</div>
+          <div class="add-dashed">+ 添加变量更新</div>
+        </div>
+
+        <div class="insp-foot">
+          <button class="btn-sm" style="color:var(--danger);border-color:transparent">删除状态</button>
+          <div style="flex:1"></div>
+          <button class="btn-sm primary">保存</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</body>
+</html>

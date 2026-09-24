@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>提前结清（测试样板）· 指南 · AgentStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sidebar:#0B1220; --sidebar-ink:#CBD5E1; --sidebar-dim:#64748B;
+  --bg:#F7F8FA; --surface:#FFFFFF; --line:#E4E7EC; --line-strong:#CBD2DC;
+  --ink:#0F172A; --ink-2:#475569; --muted:#94A3B8;
+  --primary:#4F46E5; --primary-weak:#EEF2FF; --primary-line:#C7D2FE;
+  --success:#059669; --success-weak:#ECFDF5;
+  --warning:#B45309; --warning-weak:#FFFBEB;
+  --danger:#DC2626;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{display:flex;min-height:100vh}
+
+/* ---------- Sidebar (全局导航) ---------- */
+.sidebar{width:200px;background:var(--sidebar);color:var(--sidebar-ink);display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;border-bottom:1px solid #1E293B}
+.brand-mark{width:26px;height:26px;border-radius:7px;background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:none}
+.brand-name{font-size:13px;font-weight:600;color:#F1F5F9;line-height:1.2}
+.brand-sub{font-size:10.5px;color:var(--sidebar-dim)}
+.nav{padding:10px 8px;flex:1}
+.nav-group{font-size:10.5px;color:var(--sidebar-dim);padding:10px 10px 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;color:var(--sidebar-ink);cursor:pointer;font-size:13px}
+.nav-item svg{flex:none;opacity:.75}
+.nav-item:hover{background:#151F33}
+.nav-item.active{background:#1E293B;color:#fff}
+.nav-item.active svg{opacity:1;color:#A5B4FC}
+.sidebar-foot{padding:10px 16px;border-top:1px solid #1E293B;font-size:11.5px;color:var(--sidebar-dim);display:flex;align-items:center;gap:8px}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--success)}
+
+/* ---------- 主体 ---------- */
+.main{margin-left:200px;flex:1;min-width:0;display:flex;flex-direction:column}
+
+/* 顶栏：Agent 上下文 */
+.ctxbar{height:56px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 20px;gap:12px}
+.back{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;color:var(--muted);cursor:pointer}
+.back:hover{background:#EDF0F4;color:var(--ink)}
+.agent-name{font-size:14px;font-weight:600}
+.agent-id{font-size:11px;color:var(--muted)}
+.badge{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap}
+.badge .b-dot{width:6px;height:6px;border-radius:50%}
+.badge.dirty{background:var(--warning-weak);color:var(--warning)}
+.badge.dirty .b-dot{background:var(--warning)}
+.badge.ver{background:#F1F5F9;color:var(--ink-2)}
+.ctxbar .actions{margin-left:auto;display:flex;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:7px;font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid transparent;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#4338CA}
+.btn-ghost{background:var(--surface);border-color:var(--line-strong);color:var(--ink-2)}
+.btn-ghost:hover{background:#F1F5F9;color:var(--ink)}
+
+/* 工作台三栏：组件导航 | 列表 | 检查器 */
+.workbench{flex:1;display:flex;min-height:0}
+
+/* 组件导航 */
+.comp-nav{width:196px;background:var(--surface);border-right:1px solid var(--line);padding:10px 8px;overflow-y:auto}
+.comp-nav .group{font-size:10.5px;color:var(--muted);padding:8px 10px 4px}
+.comp-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;cursor:pointer;color:var(--ink-2);font-size:12.5px}
+.comp-item:hover{background:#F1F5F9}
+.comp-item.on{background:var(--primary-weak);color:var(--primary);font-weight:500}
+.comp-item .n{margin-left:auto;font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+.comp-item.on .n{color:var(--primary)}
+
+/* 列表区 */
+.list-pane{flex:1.15;border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.pane-toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.search{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line-strong);border-radius:7px;height:29px;padding:0 9px;width:210px;color:var(--muted)}
+.search input{border:0;outline:0;font-size:12px;flex:1;font-family:inherit;background:transparent;color:var(--ink)}
+.pane-toolbar .spacer{flex:1}
+.btn-sm{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink-2);font-family:inherit}
+.btn-sm:hover{background:#F1F5F9;color:var(--ink)}
+.btn-sm.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+.btn-sm.primary:hover{background:#4338CA}
+
+.g-list{flex:1;overflow-y:auto}
+.g-item{padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+.g-item:hover{background:#FAFBFF}
+.g-item.on{background:var(--primary-weak)}
+.g-item.on::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--primary)}
+.g-cond{font-size:12.5px;color:var(--ink);font-weight:500;line-height:1.45}
+.g-act{font-size:12px;color:var(--ink-2);margin-top:3px;line-height:1.45}
+.g-act .arrow{color:var(--primary);font-weight:600;margin-right:4px}
+.g-meta{display:flex;gap:5px;margin-top:7px;align-items:center;flex-wrap:wrap}
+.tag{font-size:10.5px;border-radius:4px;padding:1.5px 6px;font-weight:500;white-space:nowrap}
+.tag-crit{background:#F1F5F9;color:var(--ink-2)}
+.tag-crit.high{background:#FEF2F2;color:var(--danger)}
+.tag-jny{background:#F5F3FF;color:#6D28D9}
+.tag-tool{background:var(--success-weak);color:var(--success)}
+.tag-rsp{background:#FFF7ED;color:var(--warning)}
+.tag-off{background:#F1F5F9;color:var(--muted);text-decoration:line-through}
+.g-prio{margin-left:auto;font-size:10.5px;color:var(--muted)}
+.g-prio b{color:var(--ink-2);font-family:'JetBrains Mono',monospace}
+
+/* 检查器 */
+.insp{width:400px;background:var(--surface);display:flex;flex-direction:column;overflow-y:auto}
+.insp-head{padding:12px 16px 10px;border-bottom:1px solid var(--line)}
+.insp-title{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px}
+.insp-id{font-size:10.5px;color:var(--muted);margin-top:2px}
+.fld{padding:12px 16px;border-bottom:1px solid var(--line)}
+.fld-label{font-size:11.5px;font-weight:500;color:var(--ink-2);margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.fld-label .hint{color:var(--muted);font-weight:400;font-size:11px}
+.ta{width:100%;border:1px solid var(--line-strong);border-radius:7px;padding:8px 10px;font-size:12.5px;line-height:1.55;font-family:inherit;color:var(--ink);background:#FBFBFC;resize:vertical}
+.ta:focus{outline:2px solid var(--primary-line);border-color:var(--primary);background:#fff}
+.row2{display:flex;gap:10px}
+.row2 .fld{flex:1}
+select.sl{height:30px;border:1px solid var(--line-strong);border-radius:7px;font-size:12.5px;padding:0 8px;font-family:inherit;color:var(--ink);background:#fff;width:100%}
+input.num{height:30px;border:1px solid var(--line-strong);border-radius:7px;font-size:12.5px;padding:0 8px;font-family:'JetBrains Mono',monospace;width:80px}
+.switch{width:34px;height:19px;border-radius:10px;background:var(--success);position:relative;cursor:pointer;flex:none}
+.switch::after{content:'';position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;top:2px;right:2px}
+.chipset{display:flex;gap:6px;flex-wrap:wrap}
+.pick{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;background:var(--primary-weak);color:var(--primary);border:1px solid var(--primary-line);border-radius:6px;padding:3px 8px;cursor:pointer}
+.pick button{border:0;background:none;color:inherit;cursor:pointer;font-size:12px;line-height:1;padding:0}
+.pick.add{background:#fff;color:var(--ink-2);border-style:dashed}
+.insp-foot{margin-top:auto;padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;background:#FBFCFD}
+.btn-danger{color:var(--danger)}
+.btn-danger:hover{background:#FEF2F2}
+.rel-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;margin-bottom:6px;font-size:12px;background:#FBFBFC}
+.rel-row .to{margin-left:auto;font-size:10.5px;color:var(--muted)}
+.rel-row code{font-family:'JetBrains Mono',monospace;font-size:11px;background:#F1F5F9;padding:1px 5px;border-radius:4px;color:var(--ink-2)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ 全局侧栏 ============ -->
+    <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div>
+        <div class="brand-name">AgentStudio</div>
+        <div class="brand-sub">Agent 配置与仿真</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">AgentStudio</div>
+      <div class="nav-item active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+        Agents <span class="count">4</span>
+      </div>
+      <div class="nav-group">仿真</div>
+      <div class="nav-item" onclick="location.href=\'../chat/01-conversation.html\'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        对话仿真
+      </div>
+      <div class="nav-item" onclick="location.href=\'../chat/02-auto-simulation.html\'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+        自动仿真
+      </div>
+      <div class="nav-group">观测</div>
+      <div class="nav-item" onclick="location.href=\'../chat/03-observability.html\'">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-7"/></svg>
+        追踪与观测
+      </div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 1-.4 2.4l2 1.6-2 3.4-2.4-.9a7 7 0 0 1-2.1 1.2L13.7 22h-3.4l-.4-2.3a7 7 0 0 1-2.1-1.2l-2.4.9-2-3.4 2-1.6A7 7 0 0 1 5 12c0-.8.14-1.6.4-2.4l-2-1.6 2-3.4 2.4.9a7 7 0 0 1 2.1-1.2L10.3 2h3.4l.4 2.3a7 7 0 0 1 2.1 1.2l2.4-.9 2 3.4-2 1.6c.26.8.4 1.6.4 2.4z"/></svg>
+        设置
+      </div>
+    </nav>
+    <div class="sidebar-foot"><span class="dot-live"></span> server · v3.3.1 · 运行中</div>
+  </aside>
+
+  <div class="main">
+    <!-- ============ Agent 上下文栏 ============ -->
+    <div class="ctxbar">
+      <span class="back"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></span>
+      <div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="agent-name">提前结清（测试样板）</span>
+          <span class="badge dirty"><span class="b-dot"></span>3 处未发布更改</span>
+          <span class="badge ver mono">v1.0.0</span>
+        </div>
+        <div class="agent-id mono">onb-094c4bbe2663 · 上次保存 10 分钟前</div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-ghost">导出 JSON</button>
+        <button class="btn btn-ghost">试跑</button>
+        <button class="btn btn-ghost">保存草稿</button>
+        <button class="btn btn-primary">发布新版本</button>
+      </div>
+    </div>
+
+    <!-- ============ 工作台 ============ -->
+    <div class="workbench">
+      <!-- 组件导航 -->
+      <nav class="comp-nav">
+        <div class="group">Agent 定义</div>
+        <div class="comp-item">基础信息</div>
+        <div class="comp-item">边界与开场白</div>
+        <div class="group">上下文工程组件</div>
+        <div class="comp-item on">指南 <span class="n">6</span></div>
+        <div class="comp-item">旅程 <span class="n">1</span></div>
+        <div class="comp-item">变量 <span class="n">6</span></div>
+        <div class="comp-item">术语表 <span class="n">1</span></div>
+        <div class="comp-item">预设话术 <span class="n">2</span></div>
+        <div class="comp-item">工具 <span class="n">3</span></div>
+        <div class="comp-item">检索器 <span class="n">2</span></div>
+        <div class="group">高级</div>
+        <div class="comp-item">关系 <span class="n">0</span></div>
+        <div class="comp-item">观察 <span class="n">0</span></div>
+      </nav>
+
+      <!-- 指南列表 -->
+      <section class="list-pane">
+        <div class="pane-toolbar">
+          <div class="search">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+            <input placeholder="搜索条件 / 动作">
+          </div>
+          <button class="btn-sm">全部旅程</button>
+          <button class="btn-sm">严重级别</button>
+          <div class="spacer"></div>
+          <button class="btn-sm primary">+ 新建指南</button>
+        </div>
+        <div class="g-list">
+          <div class="g-item">
+            <div class="g-cond">用户首次进入对话，或发送问候语如"你好"、"您好"、"哈喽"等表达初始接触意图</div>
+            <div class="g-act"><span class="arrow">→</span>以友好、专业的语气进行欢迎，主动询问用户要办理哪个业务，控制在两句话内</div>
+            <div class="g-meta">
+              <span class="tag tag-crit">中</span>
+              <span class="g-prio">优先级 <b>1</b></span>
+            </div>
+          </div>
+          <div class="g-item">
+            <div class="g-cond">客户办理的业务，不是提前结清的业务</div>
+            <div class="g-act"><span class="arrow">→</span>告知当前的业务办理范围</div>
+            <div class="g-meta">
+              <span class="tag tag-crit">中</span>
+              <span class="tag tag-rsp">rsp_yrUDel</span>
+              <span class="g-prio">优先级 <b>1</b></span>
+            </div>
+          </div>
+          <div class="g-item on">
+            <div class="g-cond">如果客户表达投诉意向</div>
+            <div class="g-act"><span class="arrow">→</span>转人工</div>
+            <div class="g-meta">
+              <span class="tag tag-crit high">高</span>
+              <span class="tag tag-rsp">rsp_Rsn5SI</span>
+              <span class="g-prio">优先级 <b>10</b></span>
+            </div>
+          </div>
+          <div class="g-item">
+            <div class="g-cond">完成核心业务交互后，用户提出结束对话或不再联系的要求</div>
+            <div class="g-act"><span class="arrow">→</span>祝福客户生活愉快，并结束对话</div>
+            <div class="g-meta">
+              <span class="tag tag-crit">中</span>
+              <span class="g-prio">优先级 <b>1</b></span>
+            </div>
+          </div>
+          <div class="g-item">
+            <div class="g-cond">在客户名下有合同的节点后，如果客户选择多个合同或者要求全部结清</div>
+            <div class="g-act"><span class="arrow">→</span>进行解释说明，当前我们只能一个合同一个合同办理</div>
+            <div class="g-meta">
+              <span class="tag tag-crit">中</span>
+              <span class="tag tag-jny">jny_LuAwQZ</span>
+              <span class="g-prio">优先级 <b>1</b></span>
+            </div>
+          </div>
+          <div class="g-item">
+            <div class="g-cond">客户不同意办理预约且仍坚持立即结清</div>
+            <div class="g-act"><span class="arrow">→</span>转人工处理</div>
+            <div class="g-meta">
+              <span class="tag tag-crit">中</span>
+              <span class="tag tag-jny">jny_LuAwQZ</span>
+              <span class="tag tag-rsp">rsp_Rsn5SI</span>
+              <span class="g-prio">优先级 <b>1</b></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 检查器 -->
+      <aside class="insp">
+        <div class="insp-head">
+          <div class="insp-title">编辑指南 <span class="tag tag-crit high">高严重级别</span></div>
+          <div class="insp-id mono">gdl_VrXi0E · category: global</div>
+        </div>
+
+        <div class="fld">
+          <div class="fld-label">条件 Condition <span class="hint">LLM 评估的触发条件</span></div>
+          <textarea class="ta" rows="2">如果客户表达投诉意向</textarea>
+        </div>
+        <div class="fld">
+          <div class="fld-label">动作 Action <span class="hint">命中后要求智能体执行的行为</span></div>
+          <textarea class="ta" rows="2">转人工</textarea>
+        </div>
+
+        <div class="row2">
+          <div class="fld">
+            <div class="fld-label">严重级别</div>
+            <select class="sl"><option>低 low</option><option selected>中 medium</option><option>高 high</option></select>
+          </div>
+          <div class="fld">
+            <div class="fld-label">优先级 <span class="hint">数值越大越优先</span></div>
+            <input class="num" value="10">
+          </div>
+        </div>
+
+        <div class="fld">
+          <div class="fld-label" style="justify-content:space-between">
+            <span>启用</span><span class="switch"></span>
+          </div>
+        </div>
+
+        <div class="fld">
+          <div class="fld-label">绑定预设话术 <span class="hint">命中后强制使用该模板</span></div>
+          <div class="chipset">
+            <span class="pick mono">rsp_Rsn5SI <button>×</button></span>
+            <span class="pick add">+ 添加话术</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:7px;line-height:1.5;border-left:2px solid var(--line-strong);padding-left:8px">
+            "您的诉求已经收到，我们高度重视您的问题，为了给您带来更好的体验，优先为您接入人工客服服务。"
+          </div>
+        </div>
+
+        <div class="fld">
+          <div class="fld-label">绑定旅程 / 状态 <span class="hint">仅在这些旅程上下文中生效</span></div>
+          <div class="chipset">
+            <span class="pick add">+ 绑定旅程</span>
+          </div>
+        </div>
+
+        <div class="fld">
+          <div class="fld-label">命中时更新变量</div>
+          <div class="rel-row"><code>handoff_reason</code><span style="color:var(--muted)">=</span><code>"complaint"</code><span class="to">string</span></div>
+          <div class="rel-row" style="border-style:dashed;color:var(--muted);justify-content:center;cursor:pointer">+ 添加变量更新</div>
+        </div>
+
+        <div class="insp-foot">
+          <button class="btn-sm btn-danger" style="border-color:transparent">删除</button>
+          <div style="flex:1"></div>
+          <button class="btn-sm">取消</button>
+          <button class="btn-sm primary">保存修改</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+/* ===== AgentStudio 设计 token（与 design/agentstudio 一致） ===== */
+:root {
+  --bg: #F7F8FA;
+  --surface: #FFFFFF;
+  --line: #E4E7EC;
+  --line-strong: #CBD2DC;
+  --ink: #0F172A;
+  --ink-2: #475569;
+  --muted: #94A3B8;
+  --primary: #4F46E5;
+  --primary-weak: #EEF2FF;
+  --primary-line: #C7D2FE;
+  --success: #059669;
+  --success-weak: #ECFDF5;
+  --warning: #B45309;
+  --warning-weak: #FFFBEB;
+  --danger: #DC2626;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* 滚动条收细（工具观感） */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #D5DAE2; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }

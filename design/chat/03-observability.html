@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>追踪与观测 · AgentStudio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sidebar:#0B1220; --sidebar-ink:#CBD5E1; --sidebar-dim:#64748B;
+  --bg:#F7F8FA; --surface:#FFFFFF; --line:#E4E7EC; --line-strong:#CBD2DC;
+  --ink:#0F172A; --ink-2:#475569; --muted:#94A3B8;
+  --primary:#4F46E5; --primary-weak:#EEF2FF; --primary-line:#C7D2FE;
+  --success:#059669; --success-weak:#ECFDF5;
+  --warning:#B45309; --warning-weak:#FFFBEB;
+  --danger:#DC2626;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace}
+.app{display:flex;min-height:100vh}
+.sidebar{width:224px;background:var(--sidebar);color:var(--sidebar-ink);display:flex;flex-direction:column;position:fixed;top:0;bottom:0;left:0}
+.brand{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;border-bottom:1px solid #1E293B}
+.brand-mark{width:26px;height:26px;border-radius:7px;background:var(--primary);display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;flex:none}
+.brand-name{font-size:13px;font-weight:600;color:#F1F5F9;line-height:1.2}
+.brand-sub{font-size:10.5px;color:var(--sidebar-dim)}
+.nav{padding:10px 8px;flex:1}
+.nav-group{font-size:10.5px;color:var(--sidebar-dim);padding:10px 10px 5px;letter-spacing:.02em}
+.nav-item{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:7px;color:var(--sidebar-ink);cursor:pointer;font-size:13px}
+.nav-item svg{flex:none;opacity:.75}
+.nav-item:hover{background:#151F33}
+.nav-item.active{background:#1E293B;color:#fff}
+.nav-item.active svg{opacity:1;color:#A5B4FC}
+.nav-item .count{margin-left:auto;font-size:11px;color:var(--sidebar-dim);background:#151F33;border-radius:10px;padding:1px 7px}
+.sidebar-foot{padding:10px 16px;border-top:1px solid #1E293B;font-size:11.5px;color:var(--sidebar-dim);display:flex;align-items:center;gap:8px}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--success)}
+
+.main{margin-left:224px;flex:1;min-width:0}
+.topbar{height:52px;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:10}
+.crumb{font-size:13px;color:var(--muted)}
+.crumb b{color:var(--ink);font-weight:600}
+.topbar-right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.content{padding:20px 24px;max-width:1240px}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px}
+.page-title{font-size:19px;font-weight:600;letter-spacing:-.01em}
+.page-desc{color:var(--ink-2);font-size:12.5px;margin-top:3px}
+
+/* tabs */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.tab{height:38px;padding:0 18px;display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-2);cursor:pointer;border-bottom:2px solid transparent}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--primary);border-bottom-color:var(--primary);font-weight:500}
+.tab .t-count{font-size:11px;color:var(--muted);background:var(--bg);border-radius:10px;padding:1px 7px;font-family:'JetBrains Mono',monospace}
+
+.filterbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+.search{display:flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line-strong);border-radius:7px;height:32px;padding:0 10px;width:280px;color:var(--muted)}
+.search input{border:0;outline:0;font-size:12.5px;flex:1;font-family:inherit;background:transparent;color:var(--ink)}
+.chips{display:flex;gap:6px}
+.chip{height:28px;padding:0 11px;border-radius:14px;font-size:12px;display:inline-flex;align-items:center;cursor:pointer;color:var(--ink-2);border:1px solid transparent}
+.chip:hover{background:#EDF0F4}
+.chip.on{background:var(--primary-weak);color:var(--primary);font-weight:500}
+.filterbar .spacer{flex:1}
+.count-pill{font-size:12px;color:var(--ink-2)}
+.count-pill b{color:var(--ink);font-family:'JetBrains Mono',monospace}
+
+/* session list with per-turn expansion */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sess-row{border-bottom:1px solid var(--line);cursor:pointer}
+.sess-row:last-child{border-bottom:0}
+.sess-row:hover{background:#FAFBFF}
+.sess-head-row{display:flex;align-items:center;gap:14px;padding:13px 16px}
+.sess-row .chev{color:var(--muted);transition:transform .15s;flex:none}
+.sess-row.open .chev{transform:rotate(90deg)}
+.sess-main{flex:1;min-width:0}
+.sess-title{font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+.sess-title .live-dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:none}
+.sess-title .end-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex:none}
+.sess-id{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);margin-top:3px}
+.sess-agent{display:flex;align-items:center;gap:6px;color:var(--ink-2);min-width:120px}
+.sess-agent .a-ava{width:20px;height:20px;border-radius:6px;background:var(--primary-weak);color:var(--primary);display:grid;place-items:center;font-size:10px;font-weight:600}
+.sess-user{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--ink-2);min-width:150px}
+.badge{display:inline-flex;align-items:center;gap:5px;height:21px;padding:0 8px;border-radius:5px;font-size:11px;font-weight:500;white-space:nowrap}
+.badge .b-dot{width:6px;height:6px;border-radius:50%}
+.badge.active{background:var(--success-weak);color:var(--success)}
+.badge.active .b-dot{background:var(--success)}
+.badge.ended{background:#F1F5F9;color:var(--ink-2)}
+.badge.ended .b-dot{background:#94A3B8}
+.sess-time{color:var(--ink-2);font-size:12px;white-space:nowrap;min-width:130px;text-align:right}
+
+/* turns table inside expanded session */
+.turns{display:none;background:var(--bg);border-top:1px solid var(--line);padding:4px 16px 14px}
+.sess-row.open .turns{display:block}
+.turns-head{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);padding:10px 4px 6px}
+.turns-head b{color:var(--ink-2);font-weight:600}
+.turn-item{display:flex;align-items:flex-start;gap:12px;padding:8px 4px;border-top:1px dashed var(--line)}
+.turn-no{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted);flex:none;width:30px;padding-top:2px}
+.turn-msg{flex:1;min-width:0;font-size:12.5px;line-height:1.5;color:var(--ink-2)}
+.turn-msg .q{color:var(--ink)}
+.turn-msg .a{color:var(--ink-2)}
+.turn-meta{flex:none;display:flex;align-items:center;gap:10px}
+.turn-meta .t-tools{font-size:10.5px;color:var(--success);background:var(--success-weak);border-radius:4px;padding:1px 6px}
+.turn-meta .t-time{font-size:11px;color:var(--muted)}
+.trace-link{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--primary);cursor:pointer;text-decoration:none;flex:none}
+.trace-link .tid{font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:10px}
+
+/* traces tab */
+.trace-empty{padding:56px 20px;text-align:center;color:var(--muted)}
+.trace-empty .e-icon{width:48px;height:48px;border-radius:12px;background:#F1F5F9;display:grid;place-items:center;margin:0 auto 12px;color:var(--muted)}
+.trace-empty .e-title{font-size:13px;color:var(--ink-2);font-weight:500}
+.trace-empty .e-sub{font-size:12px;margin-top:4px}
+.trace-empty .btn{margin-top:16px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;border-radius:7px;font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid transparent;font-family:inherit}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#4338CA}
+.btn-ghost{background:var(--surface);border-color:var(--line-strong);color:var(--ink-2)}
+.btn-ghost:hover{background:#F1F5F9;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ Sidebar ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div>
+        <div class="brand-name">AgentStudio</div>
+        <div class="brand-sub">Agent 配置与仿真</div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-group">AgentStudio</div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
+        Agents <span class="count">4</span>
+      </div>
+      <div class="nav-group">仿真</div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        对话仿真
+      </div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"/><path d="M21 3v5h-5"/></svg>
+        自动仿真
+      </div>
+      <div class="nav-group">观测</div>
+      <div class="nav-item active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 5-7"/></svg>
+        追踪与观测
+      </div>
+      <div class="nav-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 1-.4 2.4l2 1.6-2 3.4-2.4-.9a7 7 0 0 1-2.1 1.2L13.7 22h-3.4l-.4-2.3a7 7 0 0 1-2.1-1.2l-2.4.9-2-3.4 2-1.6A7 7 0 0 1 5 12c0-.8.14-1.6.4-2.4l-2-1.6 2-3.4 2.4.9a7 7 0 0 1 2.1-1.2L10.3 2h3.4l.4 2.3a7 7 0 0 1 2.1 1.2l2.4-.9 2 3.4-2 1.6c.26.8.4 1.6.4 2.4z"/></svg>
+        设置
+      </div>
+    </nav>
+    <div class="sidebar-foot"><span class="dot-live"></span> server · v3.3.1 · 运行中</div>
+  </aside>
+
+  <!-- ============ Main ============ -->
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">观测 / <b>追踪与观测</b></div>
+      <div class="topbar-right">
+        <button class="btn btn-ghost">打开 langfuse</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="page-head">
+        <div>
+          <div class="page-title">追踪与观测</div>
+          <div class="page-desc">会话记录（MySQL 台账 + 每轮 trace_id）+ 链路浏览 · 合并视图</div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab on">会话记录 <span class="t-count">12</span></div>
+        <div class="tab">链路浏览</div>
+      </div>
+
+      <!-- ====== 会话记录 ====== -->
+      <div id="tab-sessions">
+        <div class="filterbar">
+          <div class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input placeholder="搜索标题 / 会话 ID / 客户…">
+          </div>
+          <div class="chips"><span class="chip on">全部</span><span class="chip">进行中</span><span class="chip">已结束</span><span class="chip">自动仿真</span></div>
+          <div class="spacer"></div>
+          <div class="count-pill">共 <b>12</b> 个会话</div>
+        </div>
+
+        <div class="card">
+          <!-- session 1 (expanded showing turns) -->
+          <div class="sess-row open">
+            <div class="sess-head-row">
+              <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+              <div class="sess-main">
+                <div class="sess-title"><span class="live-dot"></span>提前结清咨询</div>
+                <div class="sess-id">hmZ6Gi2RQw · 自动仿真 run_20260922_1405</div>
+              </div>
+              <div class="sess-agent"><span class="a-ava">提</span>提前结清</div>
+              <div class="sess-user">cust_20260922_001</div>
+              <span class="badge active"><span class="b-dot"></span>进行中</span>
+              <div class="sess-time">3 轮 · 今天 14:05</div>
+            </div>
+            <div class="turns">
+              <div class="turns-head">共 <b>3</b> 轮 · 每轮可打开 langfuse 链路（由每轮 trace_id 记录支撑）</div>
+              <div class="turn-item">
+                <span class="turn-no">#1</span>
+                <div class="turn-msg"><span class="q">你好，我想提前结清车贷。</span><br><span class="a">→ 您好，我是提前结清助手…</span></div>
+                <div class="turn-meta"><span class="t-tools">1 工具</span><span class="t-time">14:05:01</span></div>
+                <a class="trace-link"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>链路 <span class="tid mono">7f3a9…</span></a>
+              </div>
+              <div class="turn-item">
+                <span class="turn-no">#2</span>
+                <div class="turn-msg"><span class="q">好的，那提前结清需要支付多少钱？</span><br><span class="a">→ 经核算，需一次性支付 156,320.50 元…</span></div>
+                <div class="turn-meta"><span class="t-tools">1 工具</span><span class="t-time">14:05:09</span></div>
+                <a class="trace-link"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>链路 <span class="tid mono">8b12c…</span></a>
+              </div>
+              <div class="turn-item">
+                <span class="turn-no">#3</span>
+                <div class="turn-msg"><span class="q">如果现在申请，多久能完成结清？</span><br><span class="a">→ 正在处理…</span></div>
+                <div class="turn-meta"><span class="t-time">14:05:17</span></div>
+                <a class="trace-link"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>链路 <span class="tid mono">生成中…</span></a>
+              </div>
+            </div>
+          </div>
+
+          <!-- session 2 (collapsed) -->
+          <div class="sess-row" onclick="this.classList.toggle('open')">
+            <div class="sess-head-row">
+              <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+              <div class="sess-main">
+                <div class="sess-title"><span class="live-dot"></span>余额与还款计划</div>
+                <div class="sess-id">J4mPqX9zK1 · 手动对话仿真</div>
+              </div>
+              <div class="sess-agent"><span class="a-ava">提</span>提前结清</div>
+              <div class="sess-user">guest</div>
+              <span class="badge active"><span class="b-dot"></span>进行中</span>
+              <div class="sess-time">2 轮 · 今天 13:51</div>
+            </div>
+            <div class="turns">
+              <div class="turns-head">共 <b>2</b> 轮</div>
+              <div class="turn-item"><span class="turn-no">#1</span><div class="turn-msg"><span class="q">我想查一下还款计划。</span></div><div class="turn-meta"><span class="t-time">13:50:40</span></div><a class="trace-link">链路 <span class="tid mono">c3d4e…</span></a></div>
+              <div class="turn-item"><span class="turn-no">#2</span><div class="turn-msg"><span class="q">好的，谢谢。</span></div><div class="turn-meta"><span class="t-time">13:51:02</span></div><a class="trace-link">链路 <span class="tid mono">e5f6a…</span></a></div>
+            </div>
+          </div>
+
+          <!-- session 3 (collapsed, ended) -->
+          <div class="sess-row" onclick="this.classList.toggle('open')">
+            <div class="sess-head-row">
+              <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+              <div class="sess-main">
+                <div class="sess-title"><span class="end-dot"></span>结清金额复核</div>
+                <div class="sess-id">R8wE2uY6tA · 手动对话仿真</div>
+              </div>
+              <div class="sess-agent"><span class="a-ava">提</span>提前结清</div>
+              <div class="sess-user">cust_20260921_077</div>
+              <span class="badge ended"><span class="b-dot"></span>已结束</span>
+              <div class="sess-time">5 轮 · 昨天 18:21</div>
+            </div>
+            <div class="turns">
+              <div class="turns-head">共 <b>5</b> 轮</div>
+              <div class="turn-item"><span class="turn-no">#1</span><div class="turn-msg"><span class="q">你好，帮我复核结清金额。</span></div><div class="turn-meta"><span class="t-time">昨天 18:19</span></div><a class="trace-link">链路 <span class="tid mono">a1f2b…</span></a></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== 链路浏览（占位） ====== -->
+      <div id="tab-traces" style="display:none">
+        <div class="card">
+          <div class="trace-empty">
+            <div class="e-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+            <div class="e-title">链路浏览（规划中）</div>
+            <div class="e-sub">将在此聚合 langfuse 的 trace 列表（按 agent / 会话 / 时间过滤），或内嵌 langfuse 面板。当前先以「会话记录 → 每轮 trace 链接」跳转 langfuse 详情页。</div>
+            <button class="btn btn-ghost">打开 langfuse 面板</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+document.querySelectorAll('.tabs .tab').forEach(function(tab, i){
+  tab.addEventListener('click', function(){
+    document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('on'));
+    tab.classList.add('on');
+    document.getElementById('tab-sessions').style.display = i===0 ? '' : 'none';
+    document.getElementById('tab-traces').style.display = i===1 ? '' : 'none';
+  });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+# parlant-agent-runtime 依赖基础设施
+# 用法：docker compose up -d
+#
+# 说明：
+# - MongoDB：文档库（阶段2 起作为 Parlant 实体/会话存储 + agent-definition 定义层存储）。
+#   注意：自建社区版不支持 Atlas 的 $vectorSearch，向量检索请用 Qdrant。
+# - Qdrant：向量库（检索器知识 / glossary 等语义索引）。
+# - langfuse：自托管需要 postgres+redis，官方有独立 compose，
+#   见 https://langfuse.com/self-hosting/docker-compose —— 这里不内置，避免把 dev 环境搞重。
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: parlant-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-parlant}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-parlant-dev}
+    volumes:
+      - parlant-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: parlant-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC
+    volumes:
+      - parlant-qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  parlant-mongo-data:
+  parlant-qdrant-data:

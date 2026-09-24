@@ -1,0 +1,36 @@
+[project]
+name = "parlant-agent-server"
+version = "0.1.0"
+description = "BFF / metadata service for the Parlant agent platform: agent definition CRUD + publish orchestration (sole writer of the definition layer), session proxy + SSE passthrough to parlant-agent-runtime; the only backend facing parlant-agent-web"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "httpx>=0.27",         # runtime client（boundary 层，异步 + SSE 透传）
+    "motor>=3.5",          # MongoDB async driver（定义层 agent_definitions，本服务独占写）
+    "sqlalchemy[asyncio]>=2.0",
+    "aiomysql>=0.3.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.5",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
