@@ -19,7 +19,11 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
-build/
+# 构建产物（只忽略 Python 包构建目录；切勿用裸 "build/" —— 会误伤
+# parlant-agent-web/src/pages/build/ 源码目录，导致 Tailwind 自动扫描跳过它们）
+/build/
+parlant-agent-runtime/build/
+parlant-agent-server/build/
 dist/
 *.so
 
