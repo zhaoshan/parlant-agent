@@ -112,7 +112,11 @@ class AgentDefinitionRepository:
         ]
 
     async def list_agents(self) -> list[dict[str, Any]]:
-        """列出全部 agent 及其当前 published/draft 版本概要。"""
+        """列出全部 agent 及其当前 published/draft 版本概要。
+
+        `name` 取最新版本定义里的 `agent.name`（侧栏下拉等 UI 展示用；旧定义
+        可能缺失，回退 agent_id）。
+        """
         pipeline = [
             {"$sort": {"updated_at": -1}},
             {"$group": {"_id": "$agent_id", "docs": {"$push": "$$ROOT"}}},
@@ -125,6 +129,10 @@ class AgentDefinitionRepository:
             out.append(
                 {
                     "agent_id": grp["_id"],
+                    "name": (
+                        latest.get("definition", {}).get("agent", {}).get("name")
+                        or grp["_id"]
+                    ),
                     "published_version": published["version"] if published else None,
                     "latest_version": latest["version"],
                     "latest_status": latest["status"],

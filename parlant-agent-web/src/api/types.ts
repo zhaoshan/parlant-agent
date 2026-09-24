@@ -3,6 +3,8 @@
 // ---------- Agent ----------
 export interface AgentInfo {
   agent_id: string
+  /** Agent 名称（定义 agent.name；旧定义可能缺失，回退 agent_id） */
+  name: string | null
   published_version: string | null
   latest_version: string
   latest_status: string

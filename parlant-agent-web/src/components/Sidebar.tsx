@@ -13,6 +13,17 @@ const NAV = [
   { to: '/settings', label: '设置', Icon: GearIcon },
 ]
 
+/** Agent 显示名：优先 agent.name，缺失回退 agent_id。 */
+function agentLabel(a: { agent_id: string; name?: string | null } | null | undefined): string {
+  return a?.name?.trim() || a?.agent_id || '未选择'
+}
+
+/** 头像字母：取显示名首字符（避免展示 code 时看着像缩写）。 */
+function agentInitial(a: { agent_id: string; name?: string | null } | null | undefined): string {
+  const s = agentLabel(a)
+  return s === '未选择' ? '?' : s.slice(0, 1).toUpperCase()
+}
+
 export default function Sidebar() {
   const navigate = useNavigate()
   const { agents, currentAgent, setAgents, setCurrentAgent } = useApp()
@@ -67,13 +78,14 @@ export default function Sidebar() {
           }}
         >
           <span className="grid h-6 w-6 flex-none place-items-center rounded-md bg-[var(--primary)] text-[11px] font-bold text-white">
-            {currentAgent?.agent_id?.slice(0, 1).toUpperCase() ?? '?'}
+            {agentInitial(currentAgent)}
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-1 text-[12.5px] font-semibold text-[var(--ink)]">
-              <span className="truncate">{currentAgent?.agent_id ?? '未选择'}</span>
+              <span className="truncate">{agentLabel(currentAgent)}</span>
               <span className="text-[10px] text-[var(--muted)]">▾</span>
             </div>
+            <div className="mono truncate text-[9.5px] text-[var(--muted)]">{currentAgent?.agent_id}</div>
           </div>
           {/* 下拉列表 */}
           {menuOpen && (
@@ -98,11 +110,11 @@ export default function Sidebar() {
                       currentAgent?.agent_id === a.agent_id ? 'bg-[var(--primary)] text-white' : 'bg-[var(--primary-weak)] text-[var(--primary)]'
                     }`}
                   >
-                    {a.agent_id.slice(0, 1).toUpperCase()}
+                    {agentInitial(a)}
                   </span>
                   <div className="min-w-0">
-                    <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{a.agent_id}</div>
-                    <div className="mono text-[9.5px] text-[var(--muted)]">{a.agent_id}</div>
+                    <div className="truncate text-[12px] font-semibold text-[var(--ink)]">{agentLabel(a)}</div>
+                    <div className="mono truncate text-[9.5px] text-[var(--muted)]">{a.agent_id}</div>
                   </div>
                   {currentAgent?.agent_id === a.agent_id && (
                     <span className="ml-auto text-[11px] text-[var(--primary)]">✓</span>
