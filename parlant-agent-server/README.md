@@ -34,14 +34,14 @@ cp .env.example .env   # 填 RUNTIME_BASE_URL / MONGO_URI / MYSQL_URI / PORT
 
 见 `.env.example`：
 
-| 变量 | 默认 | 说明 |
+| 变量 | 必需 | 说明 |
 |---|---|---|
-| `RUNTIME_BASE_URL` | `http://127.0.0.1:8000` | 下游 parlant-agent-runtime |
-| `RUNTIME_TIMEOUT` | `30.0` | 常规请求超时（load 单独 600s，见下） |
-| `MONGO_URI` | `mongodb://parlant:parlant-dev@localhost:27017/parlant?authSource=admin` | 定义层 |
-| `MYSQL_URI` | `mysql+aiomysql://root:root123456@127.0.0.1:3306/parlant` | 会话台账 |
-| `HOST` / `PORT` | `0.0.0.0` / `8081` | 服务监听 |
-| `CORS_ALLOW_ORIGINS` | `*` | 跨域（生产收紧为 web 来源，逗号分隔） |
+| `RUNTIME_BASE_URL` | 否 | 下游 parlant-agent-runtime（默认 `http://127.0.0.1:8000`） |
+| `RUNTIME_TIMEOUT` | 否 | 常规请求超时（默认 `30.0`；load 单独 600s，见下） |
+| `MONGO_URI` | **是** | 定义层（缺失则启动报错） |
+| `MYSQL_URI` | **是** | 会话台账（缺失则启动报错） |
+| `HOST` / `PORT` | 否 | 服务监听（默认 `0.0.0.0` / `8081`） |
+| `CORS_ALLOW_ORIGINS` | 否 | 跨域（默认 `*`，生产收紧为 web 来源，逗号分隔） |
 
 ## 关键端点
 

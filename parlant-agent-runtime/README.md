@@ -33,14 +33,14 @@ cp .env.example .env
 
 见 `.env.example`。关键项：
 
-| 变量 | 说明 |
-|---|---|
-| `LITELLM_PROVIDER_MODEL_NAME` | 对话模型，**必须带 provider 前缀**（如 `openai/xxx`），适配器不做拼接 |
-| `LITELLM_PROVIDER_BASE_URL` / `LITELLM_PROVIDER_API_KEY` | OpenAI 兼容端点 |
-| `LITELLM_EMBEDDING_MODEL_NAME` / `LITELLM_EMBEDDING_DIMENSIONS` | embedding 模型；**DIMENSIONS 必须等于真实维度**（transient 向量库预分配矩阵宽度，不一致 vstack 报错） |
-| `MONGO_URI` / `QDRANT_URL` | MongoDB / Qdrant |
-| `LANGFUSE_SECRET_KEY` / `PUBLIC_KEY` / `BASE_URL` | langfuse OTLP 追踪（启动时自动派生 OTEL_*） |
-| `TAVILY_API_KEY` | 可选，示例内置工具 `tavily_search` |
+| 变量 | 必需 | 说明 |
+|---|---|---|
+| `LITELLM_PROVIDER_MODEL_NAME` | **是** | 对话模型，**必须带 provider 前缀**（如 `openai/xxx`），适配器不做拼接 |
+| `LITELLM_PROVIDER_BASE_URL` / `LITELLM_PROVIDER_API_KEY` | **是** | OpenAI 兼容端点 |
+| `LITELLM_EMBEDDING_MODEL_NAME` / `LITELLM_EMBEDDING_DIMENSIONS` | **是** | embedding 模型；**DIMENSIONS 必须等于真实维度**（transient 向量库预分配矩阵宽度，不一致 vstack 报错） |
+| `MONGO_URI` / `QDRANT_URL` | **是** | MongoDB / Qdrant（缺失则启动报错） |
+| `LANGFUSE_SECRET_KEY` / `PUBLIC_KEY` / `BASE_URL` | 否 | langfuse OTLP 追踪（启动时自动派生 OTEL_*） |
+| `TAVILY_API_KEY` | 否 | 可选，示例内置工具 `tavily_search` |
 
 ## 内部 API（仅面向 parlant-agent-server）
 

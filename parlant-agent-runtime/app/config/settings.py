@@ -1,5 +1,8 @@
 """集中配置：全部从环境变量读取（.env 见 .env.example）。
 
+DB/向量库连接串（MONGO_URI / QDRANT_URL）不硬编码在代码里，必须从 .env
+提供（含凭据，不应入库）。缺键时 pydantic 启动即报错，便于发现配置缺失。
+
 Langfuse 三件套（public/secret key + base_url）放在工作区根目录 .env，
 由 pydantic 读入后，在 app.utils.observability.configure_langfuse_otel 里
 派生成 Parlant OpenTelemetryTracer 需要的 OTEL_* 环境变量。
@@ -40,9 +43,9 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # 基础设施
-    mongo_uri: str = "mongodb://parlant:parlant-dev@localhost:27017/parlant?authSource=admin"
-    qdrant_url: str = "http://localhost:6333"
+    # 基础设施；必需：.env 的 MONGO_URI / QDRANT_URL
+    mongo_uri: str
+    qdrant_url: str
 
     # 服务（p.Server 默认端口是 8800）
     host: str = "0.0.0.0"
