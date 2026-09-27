@@ -1,10 +1,10 @@
-# Parlant 体系化学习工程 · 项目入口（CLAUDE.md）
+# Parlant 生产级客服 Agent 搭建工程 · 项目入口（CLAUDE.md）
 
-> 给 Claude 看的项目总入口。定位、架构、启动方法、目录地图、关键约定都在这；再往下的细节见 `docs/`（学习资料）与 `plan/`（实施计划）。
+> 给 Claude 看的项目总入口。定位、架构、启动方法、目录地图、关键约定都在这；再往下的细节见 `docs/`（技术参考）与 `plan/`（实施计划）。
 
 ## 一、这是什么
 
-围绕 **Parlant v3.3.1** 体系化搭建的一套「**可配置、可调度、可观测**」客服智能体系统（学习 + 实战项目）。
+围绕 **Parlant v3.3.1** 搭建的一套「**可配置、可调度、可观测**」生产级客服智能体系统。
 核心资产：
 
 - **`agent-definition.json`** 是 Agent 配置的单一事实源（schema 见 `parlant-agent-runtime/app/models/definition.py`）。
@@ -47,10 +47,10 @@ cd parlant-agent-web && npm install && npm run dev   # localhost:5173，/api 代
 ## 四、目录地图
 
 ```
-parlant-study/
+parlant-agent/
 ├── CLAUDE.md                 # 本文件：Claude 项目入口
 ├── plan/                     # 实施计划：README 总纲 + 阶段0~5（按新架构改写）
-├── docs/                     # 学习资料（中文）
+├── docs/                     # 技术参考（中文）
 │   ├── 01-quickstart/ 02-concepts/
 │   ├── 03-production/        # 生产实践（08 内置ChatUI分析、09 Variables覆盖、10 草稿试跑、
 │   │                         #   11 内置工具、12 观测去hack化改造…）
@@ -70,7 +70,7 @@ parlant-study/
    - **上游 bug 修复**：`sdk.py` 评估任务名解析（`split("_")[-1]` → `removeprefix`，否则含下划线 id 启动崩溃）。
    - **观测插桩（技术债，待去 hack 化）**：`engine.py` / `journey_next_step_selection.py` / `gen_ai.py` 的日志与 span；方案见 `docs/03-production/12-观测插桩去hack化改造.md`，落地后 git checkout 还原这 3 处。
 2. **定义层 ↔ 引擎实体 id**：加载器显式传旅程/状态 id（`jny_*`/`sta_*`，进全局存储）；**带 `@` 后缀的实例**（草稿 `{agent_id}@draft`）子实体 id 统一加后缀隔离，否则旅程 id 冲突报错、状态 id 静默覆盖。
-3. **热加载旅程必须后台补评估**：`reachable_follow_ups`（分叉条件表）只由 SDK 启动评估产出；热加载（publish/rollback/@draft）实体由 `AgentLoader` `asyncio.create_task` 后台逐旅程评估（缓存 `parlant-data/evaluation_cache.json`，实测可达 8 分钟，阻塞会拖死 load/会话创建）。评估完成前 fork 暂不可推进。
+3. **热加载旅程必须后台补评估**：`reachable_follow_ups`（分叉条件表）只由 SDK 启动评估产出；热加载（publish/rollback/@draft）实体由 `AgentLoader` `asyncio.create_task` 后台逐旅程评估（缓存 `parlant-data/evaluation_cache.json`，实测可达 8 分钟，阻塞会拖死 load/会话创建）。评估完成前 fork 暂不可推进。**评估内容是评估时的模型生成的，可能静默残缺**（缺分支不报错、旅程跑偏但无 invalid condition id）——换模型/旅程结构变更后需质检分叉完整性，运维 SOP 见 `docs/03-production/14-评估机制与evaluation-cache.md`。
 4. **服务间 502 陷阱**：本机 macOS 系统代理（`:7899`）+ httpx `trust_env` 默认读 → 127.0.0.1 请求被转代理。**runtime↔server 全部 httpx 客户端 `trust_env=False` 直连**；server 的 `load_agent` 超时单独 600s。
 5. **时间一律 UTC**（`datetime.now(timezone.utc).replace(tzinfo=None)`）；**request_id/user 用 query 参数传中文**（header 会 latin-1 乱码）；**消息历史落库靠 SSE 旁路**（前端必须始终开 SSE）。
 6. **会话有效性在台账侧判定**（status=active 且未结束且未超时），不依赖 runtime sessions.json；runtime 会话/客户持久化 `session_store/customer_store="local"`（重启可续）。

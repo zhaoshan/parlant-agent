@@ -32,8 +32,8 @@ async def create_agent(request: Request) -> dict[str, Any]:
 
 
 @router.get("/{agent_id}")
-async def get_agent(agent_id: str, request: Request) -> dict[str, Any]:
-    doc = await _svc(request).get(agent_id)
+async def get_agent(agent_id: str, request: Request, version: str | None = None) -> dict[str, Any]:
+    doc = await _svc(request).get(agent_id, version)
     if not doc:
         raise HTTPException(status_code=404, detail=f"agent '{agent_id}' 不存在")
     return doc

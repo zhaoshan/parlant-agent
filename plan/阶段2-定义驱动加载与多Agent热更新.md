@@ -1,7 +1,7 @@
 # 阶段2：Agent 定义转换与多 Agent 调度（runtime 内部能力，体系枢纽）
 
 > 目标：把阶段1的手动映射升级为**通用加载器**——`agent-definition.json` 自动转换为 Parlant 实体；建立 **Agent 注册表**支持多 Agent 动态加载、版本化与热更新；为上游 BFF 提供 runtime 内部 API。
-> 对应学习资料：`docs/02-concepts/*`（逐组件）、`docs/04-execution-chain/02-核心模块源码地图.md`
+> 对应参考文档：`docs/02-concepts/*`（逐组件）、`docs/04-execution-chain/02-核心模块源码地图.md`
 > **2026-09-22 调整**：承载项目更名为 `parlant-agent-runtime`；原任务 2.5「管理 API（供 admin）」改为 **runtime `/internal/*` API**（只面向 parlant-agent-server，不面向前端）。定义层 MongoDB 本阶段暂存于 runtime（`databases/`），阶段3 建 server 时迁移（server 独占写、runtime 被动接收推送 + 启动拉取）。
 
 ---

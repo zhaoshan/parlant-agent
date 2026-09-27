@@ -6,6 +6,7 @@ import type { AgentInfo, AgentVariable, SessionLedgerRow, SessionMessage } from 
 import { useApp } from '../store/app'
 import { SendIcon, TraceIcon } from '../components/Icons'
 import { Switch } from './build/fields'
+import { agentInitial } from '../utils/agent'
 
 function uuid() {
   return crypto.randomUUID()
@@ -190,11 +191,11 @@ export default function Simulate() {
         </button>
         <div className="flex items-center gap-2.5">
           <div className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--primary-weak)] text-[13px] font-semibold text-[var(--primary)]">
-            {currentAgent?.agent_id?.slice(0, 1).toUpperCase() ?? '?'}
+            {agentInitial(currentAgent)}
           </div>
           <div>
             <div className="flex items-center gap-1.5 text-[13px] font-semibold">
-              {currentAgent?.agent_id ?? '未选择 Agent'}
+              {currentAgent?.name || currentAgent?.agent_id || '未选择 Agent'}
               <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
             </div>
             <div className="mono text-[11px] text-[var(--muted)]">{currentAgent?.agent_id}</div>
@@ -320,14 +321,14 @@ export default function Simulate() {
                   {m.role === 'agent' && (
                     <div className="flex items-center gap-2">
                       {m.trace_id && (
-                        <a
+                        <button
                           className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-[var(--primary)] hover:underline"
-                          onClick={() => alert(`langfuse trace: ${m.trace_id}`)}
+                          onClick={() => navigate(`/obs?trace=${encodeURIComponent(m.trace_id)}&session=${encodeURIComponent(activeId ?? '')}`)}
                         >
                           <TraceIcon size={12} />
                           查看链路
                           <span className="mono text-[10px] text-[var(--muted)]">{m.trace_id.slice(0, 8)}…</span>
-                        </a>
+                        </button>
                       )}
                     </div>
                   )}
@@ -415,19 +416,25 @@ export default function Simulate() {
           <div className="mb-5">
             <h4 className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-[var(--muted)]">最近链路</h4>
             <div className="rounded-lg border border-dashed border-[var(--primary-line)] bg-[var(--primary-weak)] p-3 text-[11.5px] text-[var(--primary)]">
-              {messages.findLast((m) => m.role === 'agent')?.trace_id ? (
-                <>
-                  最近 Agent 回复 trace_id
-                  <span className="mono mt-1.5 block break-all text-[11px]">
-                    {messages.findLast((m) => m.role === 'agent')?.trace_id}
-                  </span>
-                  <span className="mt-1 block text-[11px] opacity-80">
-                    process → guideline_matcher → tool_caller → message_generation
-                  </span>
-                </>
-              ) : (
-                '暂无链路（发送消息后出现）'
-              )}
+              {(() => {
+                const tid = messages.findLast((m) => m.role === 'agent')?.trace_id
+                return tid ? (
+                  <>
+                    最近 Agent 回复 trace_id
+                    <button
+                      className="mono mt-1.5 block break-all text-left text-[11px] underline-offset-2 hover:underline"
+                      onClick={() => navigate(`/obs?trace=${encodeURIComponent(tid)}&session=${encodeURIComponent(activeId ?? '')}`)}
+                    >
+                      {tid}
+                    </button>
+                    <span className="mt-1 block text-[11px] opacity-80">
+                      点击跳转「追踪与观测 · 链路浏览」；process → guideline_matcher → tool_caller → message_generation
+                    </span>
+                  </>
+                ) : (
+                  '暂无链路（发送消息后出现）'
+                )
+              })()}
             </div>
           </div>
         </aside>
@@ -504,7 +511,8 @@ function NewConversationDialog(props: {
   const [varLoading, setVarLoading] = useState(false)
   const [overrides, setOverrides] = useState<Record<string, OverrideEntry>>({})
 
-  // 切换 Agent 时拉取该 agent 定义里的变量清单（name→type/default 供输入控件）
+  // 切换 Agent / 模式时拉取该 agent 对应版本定义里的变量清单（name→type/default 供输入控件）。
+  // mode=draft → 草稿定义（无草稿回落已发布）；mode=published → 已发布——与建会话绑定的实例一致。
   useEffect(() => {
     let cancelled = false
     if (!agentId) {
@@ -512,24 +520,29 @@ function NewConversationDialog(props: {
       return
     }
     setVarLoading(true)
-    agentsApi
-      .detail(agentId)
-      .then((d) => {
-        if (cancelled) return
-        const def = d.definition as { variables?: { variables?: AgentVariable[] } } | null
-        setVarMeta(def?.variables?.variables ?? [])
-        setOverrides({})
-      })
-      .catch(() => {
-        if (!cancelled) setVarMeta([])
-      })
-      .finally(() => {
-        if (!cancelled) setVarLoading(false)
-      })
+    const loadDef = (v?: string) =>
+      agentsApi
+        .detail(agentId, v)
+        .then((d) => {
+          if (cancelled) return false
+          const def = d.definition as { variables?: { variables?: AgentVariable[] } } | null
+          setVarMeta(def?.variables?.variables ?? [])
+          setOverrides({})
+          return true
+        })
+        .catch(() => false)
+    const wantDraft = mode === 'draft'
+    loadDef(wantDraft ? 'draft' : undefined).then((ok) => {
+      if (cancelled) return
+      if (!ok && wantDraft) loadDef(undefined).catch(() => {})  // 无草稿时回落已发布
+      if (!ok && !wantDraft) setVarMeta([])
+    }).finally(() => {
+      if (!cancelled) setVarLoading(false)
+    })
     return () => {
       cancelled = true
     }
-  }, [agentId])
+  }, [agentId, mode])
 
   const setVarActive = (name: string, v: AgentVariable, active: boolean) => {
     setOverrides((prev) => {

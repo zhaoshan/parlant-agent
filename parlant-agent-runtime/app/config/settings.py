@@ -21,7 +21,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _APP_DIR = Path(__file__).resolve().parent
 _PROJECT_DIR = _APP_DIR.parent        # parlant-agent-runtime/
-_WORKSPACE_DIR = _PROJECT_DIR.parent  # parlant-study/（根 .env 放 Langfuse 三件套）
+_WORKSPACE_DIR = _PROJECT_DIR.parent  # parlant-agent/（根 .env 放 Langfuse 三件套）
 
 
 def _load_env_files() -> None:

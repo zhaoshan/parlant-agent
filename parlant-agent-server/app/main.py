@@ -24,7 +24,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.boundary import RuntimeClient
+from app.boundary import LangfuseClient, RuntimeClient
 from app.config import get_settings
 from app.databases import MongoConnection, MySqlConnection
 from app.repository import (
@@ -38,6 +38,7 @@ from app.routers import (
     health_router,
     internal_router,
     sessions_router,
+    traces_router,
 )
 from app.services import AgentDefinitionService, SessionService
 
@@ -62,6 +63,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     runtime_client = RuntimeClient(
         settings.runtime_base_url, timeout=settings.runtime_timeout
     )
+    langfuse_client = LangfuseClient(
+        settings.langfuse_base_url,
+        settings.langfuse_public_key,
+        settings.langfuse_secret_key,
+    )
     agent_service = AgentDefinitionService(agent_repo, runtime_client)
     session_service = SessionService(
         runtime_client, session_repo, message_repo=message_repo, agent_repo=agent_repo
@@ -73,6 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.session_repository = session_repo
     app.state.message_repository = message_repo
     app.state.runtime_client = runtime_client
+    app.state.langfuse_client = langfuse_client
     app.state.agent_service = agent_service
     app.state.session_service = session_service
     yield
@@ -98,6 +105,7 @@ def create_app() -> FastAPI:
     app.include_router(agents_router)
     app.include_router(sessions_router)
     app.include_router(customers_router)
+    app.include_router(traces_router)
     app.include_router(internal_router)
     return app
 

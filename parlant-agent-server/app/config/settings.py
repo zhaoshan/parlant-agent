@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     # 跨域：阶段3 前后端分离联调放开（生产收紧为 web 来源）
     cors_allow_origins: str = "*"
 
+    # 可观测（langfuse 数据读取）：由本服务代理取数，密钥不下发到浏览器。
+    # 未配置时 /api/traces/* 返回 503（说明性错误），不阻断其它功能。
+    langfuse_base_url: str = ""
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -1,7 +1,7 @@
 # 阶段3：parlant-agent-server（BFF）+ 聊天问答窗口
 
 > 目标：建成 **web → server → runtime** 完整链路——`parlant-agent-server` 作为前端唯一入口（BFF/元数据服务），代理会话与问答（REST + SSE 透传）；`parlant-agent-web` 实现聊天前端：选定 Agent、传入客户实体信息、发起多轮问答。
-> 对应学习资料：`docs/03-production/05-官方前端参考.md`、`docs/02-concepts/01-会话Session.md`、`docs/02-concepts/03-客户实体Customer.md`
+> 对应参考文档：`docs/03-production/05-官方前端参考.md`、`docs/02-concepts/01-会话Session.md`、`docs/02-concepts/03-客户实体Customer.md`
 > **2026-09-22 调整**：原阶段3只做 web 聊天直连 runtime；架构调整后 web **不直连 runtime**，全部经 server 代理。server BFF 骨架与代理能力并入本阶段。
 
 ---
@@ -149,6 +149,8 @@ parlant-agent-server/
 - `/obs` 页两页签：**会话记录**（`GET /api/sessions` 分页查询，按来源筛选，点开 → **只读对话视图**，
   参考模拟对话窗口但**无输入框**，每轮消息带 langfuse 链路）；**链路浏览**（v1 跳 langfuse，可后续内嵌面板）。
 - 模拟对话页的会话边栏承担"切换会话"；会话列表按当前 Agent + source=simulate，支持删除（✕）。
+- **链路浏览最小可用（2026-09-24）**：支持 `/obs?trace=<trace_id>&session=<session_id>`——从模拟对话/观测只读视图点「查看链路」**跳转到本页的链路浏览 tab**（不直接跳 langfuse），展示该 trace 的轮次（用户提问 + Agent 回复，按 session_messages 同 trace_id 反查）与时间戳；langfuse 深链降级为次要入口。
+- **完整 trace 树 / 工具调用 span 渲染（内嵌 langfuse 面板或自研 trace 视图）→ 挪阶段5**（含工具调用过程展示，见阶段3 §交付物说明）。
 
 ### 3.11 自动仿真（**已归并阶段6**，本阶段仅留设计稿）
 - 自动仿真（仿真脚本 + 执行记录，含客户级 Variables 覆盖机制）整体移入 **`plan/阶段6-自动仿真与对话测试.md`**。

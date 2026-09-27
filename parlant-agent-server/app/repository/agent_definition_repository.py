@@ -133,6 +133,7 @@ class AgentDefinitionRepository:
                         latest.get("definition", {}).get("agent", {}).get("name")
                         or grp["_id"]
                     ),
+                    "description": latest.get("definition", {}).get("agent", {}).get("description"),
                     "published_version": published["version"] if published else None,
                     "latest_version": latest["version"],
                     "latest_status": latest["status"],

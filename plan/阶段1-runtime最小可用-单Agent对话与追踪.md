@@ -1,7 +1,7 @@
 # 阶段1：parlant-agent-runtime 最小可用（单 Agent + 追踪）
 
 > 目标：用 FastAPI 包装 `p.Server()` 起服务，加载示例"提前结清"Agent，完成一次带 langfuse 追踪的问答。
-> 对应学习资料：`docs/03-production/07-FastAPI扩展.md`、`docs/03-production/04-API增强.md`、`docs/03-production/06-可观测性.md`、`docs/04-execution-chain/*`
+> 对应参考文档：`docs/03-production/07-FastAPI扩展.md`、`docs/03-production/04-API增强.md`、`docs/03-production/06-可观测性.md`、`docs/04-execution-chain/*`
 > **2026-09-22 调整**：本项目原名为 `parlant-agent-server`，架构调整后更名为 **`parlant-agent-runtime`**（执行引擎服务）；新的 `parlant-agent-server` 是阶段3才建的 BFF/元数据服务。
 
 ---

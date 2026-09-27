@@ -1,7 +1,7 @@
 # 阶段0：环境与基础
 
 > 目标：把基础设施和依赖全部备齐，跑通官方 quickstart 示例，为后续开发扫清环境障碍。
-> 对应学习资料：`docs/01-quickstart/01-安装.md`、`docs/01-quickstart/02-快速入门示例.md`
+> 对应参考文档：`docs/01-quickstart/01-安装.md`、`docs/01-quickstart/02-快速入门示例.md`
 
 ---
 
@@ -19,7 +19,7 @@
 
 ### 0.1 安装 Parlant（当前 `.venv` 尚未安装）
 ```bash
-cd /Users/zhaoshan/workspace/parlant-study
+cd /Users/zhaoshan/workspace/parlant-agent
 source .venv/bin/activate
 pip install parlant
 python -c "import parlant; print(parlant.__version__)"   # 期望 3.3.x

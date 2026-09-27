@@ -10,6 +10,9 @@ import Guidelines from './build/Guidelines'
 import Journey from './build/Journey'
 import { Canned, Glossary, Retrievers, Tools, Variables } from './build/TableModules'
 import { Observations, Relationships } from './build/Advanced'
+import { DiffList } from '../components/DiffList'
+import { diffDefinitions, type DefinitionDiff } from '../utils/diff'
+import { agentInitial } from '../utils/agent'
 
 const MODULES: { key: BuildModule; label: string; en: string; group: string; tip: string }[] = [
   { key: 'basics', label: '基础信息', en: 'Basics', group: 'Agent 定义', tip: 'Agent 的身份与元数据：名称/描述/语言/标签塑造它"是谁、负责什么"。配置得当能让 Agent 行为更贴合业务（docs/02-Agent实体）。' },
@@ -42,6 +45,10 @@ export default function Build() {
   const [publishOpen, setPublishOpen] = useState(false)
   const [newVersion, setNewVersion] = useState('')  // 留空=server 自动生成（从已发布 patch+1）
   const [busy, setBusy] = useState(false)
+  // 发布前对比：已发布版本 vs 当前草稿（结构化 diff；无已发布版本 = 首次发布，视为全新增）
+  const [publishLoading, setPublishLoading] = useState(false)
+  const [publishDiff, setPublishDiff] = useState<DefinitionDiff | null>(null)
+  const [publishVersion, setPublishVersion] = useState<string | null>(null)
 
   useEffect(() => {
     if (!currentAgent) {
@@ -49,12 +56,18 @@ export default function Build() {
       return
     }
     setSelected(null)
-    agentsApi
-      .detail(currentAgent.agent_id)
-      .then((d) => {
+    // 构建页 = 编辑草稿：优先加载 draft 槽（agent 尚无草稿时回落已发布版本）。
+    // 不能无版本 detail()——服务端缺省返回 published，重载后草稿编辑会"消失"。
+    const loadDef = (v?: string) =>
+      agentsApi.detail(currentAgent.agent_id, v).then((d) => {
         if (d.definition) load(currentAgent.agent_id, d.definition as never)
+        return !!d.definition
       })
-      .catch(() => {})
+    loadDef('draft')
+      .catch(() => false)
+      .then((ok) => {
+        if (!ok) loadDef(undefined).catch(() => {})
+      })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentAgent?.agent_id])
 
@@ -104,6 +117,30 @@ export default function Build() {
     URL.revokeObjectURL(url)
   }
 
+  /** 打开发布弹窗：先对比「已发布版本 vs 当前草稿」，无变更给出提醒。 */
+  const openPublish = async () => {
+    if (!definition || !currentAgent) return
+    setPublishOpen(true)
+    setPublishLoading(true)
+    setPublishDiff(null)
+    try {
+      const pv = currentAgent.published_version ?? null
+      let published: unknown = null
+      if (pv) {
+        const d = await agentsApi.detail(currentAgent.agent_id, pv)
+        published = d.definition
+      }
+      setPublishVersion(pv)
+      setPublishDiff(diffDefinitions(published, definition))
+    } catch {
+      // 拿不到已发布定义时降级为"首次发布"对比（全新增）
+      setPublishVersion(null)
+      setPublishDiff(diffDefinitions(null, definition))
+    } finally {
+      setPublishLoading(false)
+    }
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* ctxbar */}
@@ -112,7 +149,7 @@ export default function Build() {
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
         </button>
         <div className="flex items-center gap-2.5">
-          <div className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--primary-weak)] text-[13px] font-semibold text-[var(--primary)]">{currentAgent?.agent_id?.slice(0, 1).toUpperCase() ?? '?'}</div>
+          <div className="grid h-7 w-7 place-items-center rounded-lg bg-[var(--primary-weak)] text-[13px] font-semibold text-[var(--primary)]">{agentInitial(currentAgent)}</div>
           <div>
             <div className="flex items-center gap-2 text-[13px] font-semibold">
               {definition?.agent.name ?? currentAgent?.agent_id}
@@ -128,9 +165,10 @@ export default function Build() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <button className="inline-flex h-7.5 cursor-pointer items-center gap-1.5 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-[12px] text-[var(--ink-2)] hover:bg-[#F1F5F9]" onClick={exportJson}>导出 JSON</button>
+          <button className="inline-flex h-7.5 cursor-pointer items-center gap-1.5 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-[12px] text-[var(--ink-2)] hover:bg-[#F1F5F9]" onClick={() => navigate('/build/versions')}>版本历史</button>
           <button className="inline-flex h-7.5 cursor-pointer items-center gap-1.5 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-[12px] text-[var(--ink-2)] hover:bg-[#F1F5F9]" onClick={() => navigate('/simulate')}>试跑</button>
           <button className="inline-flex h-7.5 cursor-pointer items-center gap-1.5 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3 text-[12px] text-[var(--ink-2)] hover:bg-[#F1F5F9] disabled:opacity-50" disabled={!dirty || busy} onClick={saveDraft}>保存草稿</button>
-          <button className="inline-flex h-7.5 cursor-pointer items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 text-[12px] font-medium text-white hover:bg-[#4338CA] disabled:opacity-50" disabled={!dirty || busy} onClick={() => setPublishOpen(true)}>发布新版本</button>
+          <button className="inline-flex h-7.5 cursor-pointer items-center gap-1.5 rounded-md bg-[var(--primary)] px-3 text-[12px] font-medium text-white hover:bg-[#4338CA] disabled:opacity-50" disabled={busy} onClick={openPublish}>发布新版本</button>
         </div>
       </div>
 
@@ -185,21 +223,40 @@ export default function Build() {
       {/* 发布确认弹窗 */}
       {publishOpen && (
         <div className="fixed inset-0 z-60 grid place-items-center bg-[rgba(15,23,42,.45)]" onClick={() => setPublishOpen(false)}>
-          <div className="w-[460px] rounded-xl bg-[var(--surface)] p-5" onClick={(e) => e.stopPropagation()}>
+          <div className="w-[540px] rounded-xl bg-[var(--surface)] p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-[15px] font-semibold">发布新版本</h3>
             <p className="mt-1 text-[12px] text-[var(--muted)]">保存当前草稿为新版本并热加载到 runtime（POST /api/agents/{'{id}'}/publish）</p>
+
+            {/* 发布前差异对比 */}
+            <div className="mt-3">
+              {publishLoading ? (
+                <div className="rounded-lg border border-[var(--line)] bg-[var(--bg)] p-2.5 text-[11.5px] text-[var(--muted)]">对比已发布版本中…</div>
+              ) : publishDiff ? (
+                publishDiff.same ? (
+                  <div className="rounded-lg border border-[var(--warning)]/30 bg-[var(--warning-weak)] p-2.5 text-[12px] leading-relaxed text-[var(--warning)]">
+                    ⚠ 当前草稿与已发布版本{publishVersion ? `（v${publishVersion}）` : ''}没有任何差异，确认仍要发布吗？
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-[var(--line)] bg-[var(--bg)] p-2">
+                    <div className="mb-1 px-1 text-[11px] font-semibold text-[var(--ink-2)]">
+                      与已发布版本{publishVersion ? `（v${publishVersion}）` : '（首次发布）'}的差异 · 共 {publishDiff.total} 处
+                    </div>
+                    <div className="max-h-[200px] overflow-auto">
+                      <DiffList diff={publishDiff} />
+                    </div>
+                  </div>
+                )
+              ) : null}
+            </div>
+
             <div className="mt-4 flex flex-col gap-2">
               <label className="flex flex-col gap-1.5 text-[12px] font-medium text-[var(--ink-2)]">
                 版本号 <span className="font-normal text-[var(--muted)]">（留空=自动生成，从已发布版本 patch+1）</span>
                 <input className="mono h-[34px] rounded-md border border-[var(--line-strong)] px-2.5 outline-none focus:border-[var(--primary)]" placeholder="自动" value={newVersion} onChange={(e) => setNewVersion(e.target.value)} />
               </label>
-              <label className="flex flex-col gap-1.5 text-[12px] font-medium text-[var(--ink-2)]">
-                变更说明（可选）
-                <input className="h-[34px] rounded-md border border-[var(--line-strong)] px-2.5 outline-none focus:border-[var(--primary)]" placeholder="本次发布的内容摘要" />
-              </label>
             </div>
             <div className="mt-4 rounded-lg border border-[var(--line)] bg-[var(--bg)] p-2.5 text-[11.5px] leading-relaxed text-[var(--ink-2)]">
-              发布后：新会话使用新版本；进行中会话保持原行为；旧版本进入历史列表可回滚。
+              发布后：新会话使用新版本；进行中会话保持原行为；版本永远向前，历史版本可在「版本历史」查看与对比。
             </div>
             <div className="mt-4 flex items-center gap-2.5 border-t border-[var(--line)] pt-4">
               <button className="inline-flex h-8 cursor-pointer items-center rounded-md border border-[var(--line-strong)] px-3.5 text-[12.5px] text-[var(--ink-2)]" onClick={() => setPublishOpen(false)}>取消</button>

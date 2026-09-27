@@ -13,6 +13,16 @@ const NODE_COLOR: Record<string, { bg: string; text: string }> = {
 }
 const gid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
 
+/** 组合模式（loader 只认这 4 个值；loose 无效会静默回落 fluid，故不提供） */
+const COMPOSITION_OPTIONS = [
+  { value: 'fluid', label: 'fluid · 自由生成' },
+  { value: 'composited', label: 'composited · 拟话术' },
+  { value: 'canned_composited', label: 'canned_composited · 拟话术(仅话术源)' },
+  { value: 'strict', label: 'strict · 仅话术' },
+]
+const COMPOSITION_TIP =
+  'fluid=引擎自由生成，指南/话术仅作参考；composited=回复在措辞上模仿绑定话术（与 canned_composited 在 v3.3.1 引擎等效）；strict=只能基于绑定话术输出，不自由发挥。'
+
 export default function Journey() {
   const { definition, update, selectedId, setSelected } = useBuild()
   const [journeyId, setJourneyId] = useState<string | null>(null)
@@ -118,8 +128,8 @@ export default function Journey() {
             <F label="入口节点">
               <Select value={journey.entry_node ?? ''} onChange={(v) => updateJourney({ entry_node: v })} options={nextStateOptions} />
             </F>
-            <F label="组合模式">
-              <Select value={journey.composition_mode ?? 'fluid'} onChange={(v) => updateJourney({ composition_mode: v })} options={[{ value: 'fluid', label: 'fluid' }, { value: 'strict', label: 'strict' }, { value: 'loose', label: 'loose' }]} />
+            <F label="组合模式" tip={COMPOSITION_TIP}>
+              <Select value={journey.composition_mode ?? 'fluid'} onChange={(v) => updateJourney({ composition_mode: v })} options={COMPOSITION_OPTIONS} />
             </F>
             <F label="优先级 Priority">
               <TextInput mono value={String(journey.priority ?? 0)} onChange={(v) => updateJourney({ priority: Number(v) || 0 })} />
@@ -189,8 +199,8 @@ export default function Journey() {
                     <F label="描述 Description"><TextInput rows={2} value={curState.description ?? ''} onChange={(v) => updateState(curState.id, { description: v })} /></F>
                   </div>
                   <div className="mt-3 grid grid-cols-2 gap-4">
-                    <F label="组合模式">
-                      <Select value={curState.composition_mode ?? 'fluid'} onChange={(v) => updateState(curState.id, { composition_mode: v })} options={[{ value: 'fluid', label: 'fluid' }, { value: 'strict', label: 'strict' }, { value: 'loose', label: 'loose' }]} />
+                    <F label="组合模式" tip={COMPOSITION_TIP}>
+                      <Select value={curState.composition_mode ?? 'fluid'} onChange={(v) => updateState(curState.id, { composition_mode: v })} options={COMPOSITION_OPTIONS} />
                     </F>
                     <F label="优先级 Priority"><TextInput mono value={String(curState.priority ?? 0)} onChange={(v) => updateState(curState.id, { priority: Number(v) || 0 })} /></F>
                   </div>
@@ -228,12 +238,12 @@ export default function Journey() {
                         return (
                           <div key={i} className="rounded-md border border-[var(--line)] bg-[#FBFBFC] p-2.5">
                             <div className="flex items-center gap-2">
-                              <span className="text-[11.5px] text-[var(--ink-2)]">当条件</span>
-                              <input className="h-7 flex-1 rounded-md border border-[var(--line-strong)] px-2 text-[11.5px] outline-none" placeholder="转移条件，如：用户选择一个合同后" value={t.condition ?? ''} onChange={(e) => setTr({ condition: e.target.value })} />
+                              <span className="w-[64px] flex-none whitespace-nowrap text-[11.5px] text-[var(--ink-2)]">当条件</span>
+                              <input className="h-7 min-w-0 flex-1 rounded-md border border-[var(--line-strong)] px-2 text-[11.5px] outline-none" placeholder="转移条件，如：用户选择一个合同后" value={t.condition ?? ''} onChange={(e) => setTr({ condition: e.target.value })} />
                             </div>
                             <div className="mt-1.5 flex items-center gap-2">
-                              <span className="text-[11.5px] text-[var(--ink-2)]">→ 到状态</span>
-                              <Select value={t.to ?? ''} onChange={(v) => setTr({ to: v })} options={nextStateOptions} />
+                              <span className="w-[64px] flex-none whitespace-nowrap text-[11.5px] text-[var(--ink-2)]">→ 到状态</span>
+                              <Select className="min-w-0" value={t.to ?? ''} onChange={(v) => setTr({ to: v })} options={nextStateOptions} />
                               <button className="cursor-pointer text-[12px] text-[var(--muted)] hover:text-[var(--danger)]" onClick={() => updateState(curState.id, { transitions: (curState.transitions ?? []).filter((_, j) => j !== i) })}>✕</button>
                             </div>
                             <div className="mt-2">
@@ -242,15 +252,18 @@ export default function Journey() {
                               </F>
                             </div>
                             <div className="mt-2 flex flex-wrap items-center gap-3">
-                              <label className="flex items-center gap-1.5 text-[11.5px] text-[var(--ink-2)]">
+                              <label className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-[var(--ink-2)]">
                                 超时分支
                                 <Switch checked={t.timeout_branch ?? false} onChange={(v) => setTr({ timeout_branch: v })} />
                               </label>
-                              <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--ink-2)]">
+                              <div className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px] text-[var(--ink-2)]">
                                 响应模式
                                 <Select className="w-[110px] flex-none" value={t.response_mode ?? 'inherit'} onChange={(v) => setTr({ response_mode: v })} options={[{ value: 'inherit', label: 'inherit' }, { value: 'compose', label: 'compose' }, { value: 'strict', label: 'strict' }, { value: 'loose', label: 'loose' }]} />
                               </div>
                               <span className="text-[10.5px] text-[var(--muted)]">关键词（schema）</span>
+                            </div>
+                            <div className="mt-1 text-[10.5px] leading-relaxed text-[var(--muted)]">
+                              响应模式 / 超时分支 / 关键词 为 schema 字段（v3.3.1 引擎未消费，仅随定义保存）
                             </div>
                             <div className="mt-1.5">
                               <ChipsInput value={t.keywords ?? []} onChange={(v) => setTr({ keywords: v })} placeholder="关键词（schema，回车添加）" />

@@ -1,7 +1,7 @@
-# Parlant 体系化学习手册
+# Parlant 技术参考手册
 
 > Parlant v3.3.1 官方文档中文翻译 + 源码执行链路分析 + 实战开发计划。
-> 本目录是**学习入口**：概念与语法 → 生产实践 → 源码链路；实施路径见同级 `plan/` 目录。
+> 本目录是**技术参考入口**：概念与语法 → 生产实践 → 源码链路；实施路径见同级 `plan/` 目录。
 
 ---
 
@@ -11,7 +11,7 @@ Parlant 是一个面向客户交互的**对话编排框架（conversational harn
 
 ---
 
-## 推荐学习路线
+## 推荐阅读路线
 
 ```mermaid
 flowchart LR
@@ -69,6 +69,8 @@ flowchart LR
 | [10-草稿试跑与会话版本隔离.md](03-production/10-草稿试跑与会话版本隔离.md) | 自研：草稿 @draft 独立实例试跑、session 记录 Agent 版本/状态、不影响线上 |
 | [11-内置工具实现与配置.md](03-production/11-内置工具实现与配置.md) | 自研：journey_node_counter / variable_update / tavily_search 的实现与配置、生效机制 |
 | [12-观测插桩去hack化改造.md](03-production/12-观测插桩去hack化改造.md) | 技术债：用 litellm OTel + EngineHooks 替代 parlant 源码插桩（LLM I/O + 旅程日志） |
+| [13-发布与渠道部署设计.md](03-production/13-发布与渠道部署设计.md) | 发布流程与渠道接入设计 |
+| [14-评估机制与evaluation-cache.md](03-production/14-评估机制与evaluation-cache.md) | 自研：旅程/指南评估原理、内容寻址缓存、热加载补评估、残缺评估故障模式与运维 SOP |
 
 ### 04-execution-chain 源码执行链路（基于 v3.3.1 源码）
 | 文档 | 内容 |

@@ -83,12 +83,23 @@ async def list_sessions(
     user_id: str | None = None,
     agent_id: str | None = None,
     source: str | None = None,
+    session_id: str | None = None,
+    status: str | None = None,
     limit: int = 200,
     offset: int = 0,
 ) -> dict[str, Any]:
-    """会话列表（MySQL 台账，含有效性/来源渠道；条件可空，默认查全量）。"""
+    """会话列表（MySQL 台账，含有效性/来源渠道；条件可空，默认查全量）。
+
+    `session_id`：按会话 id 模糊匹配；`status`：active=进行中 / ended=已结束。
+    """
     return await _svc(request).list_sessions(
-        user_id=user_id, agent_id=agent_id, source=source, limit=limit, offset=offset
+        user_id=user_id,
+        agent_id=agent_id,
+        source=source,
+        session_id_like=session_id,
+        status_filter=status,
+        limit=limit,
+        offset=offset,
     )
 
 

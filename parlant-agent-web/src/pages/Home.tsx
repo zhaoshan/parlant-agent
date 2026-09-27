@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { agentsApi } from '../api/client'
 import type { AgentInfo } from '../api/types'
 import { useApp } from '../store/app'
+import { agentLabel } from '../utils/agent'
 
 export default function Home() {
   const navigate = useNavigate()
@@ -23,7 +24,11 @@ export default function Home() {
   }, [setAgents])
 
   const shown = agents.filter((a) => {
-    if (kw && !a.agent_id.toLowerCase().includes(kw.toLowerCase())) return false
+    if (kw) {
+      const k = kw.toLowerCase()
+      const hit = a.agent_id.toLowerCase().includes(k) || (a.name ?? '').toLowerCase().includes(k)
+      if (!hit) return false
+    }
     if (filter === 'published' && !a.published_version) return false
     if (filter === 'draft' && a.published_version) return false
     return true
@@ -110,22 +115,22 @@ export default function Home() {
             >
               <div className="flex items-start gap-3">
                 <div className="grid h-9 w-9 flex-none place-items-center rounded-[10px] bg-[var(--primary-weak)] text-base font-bold text-[var(--primary)]">
-                  {a.agent_id.slice(0, 1).toUpperCase()}
+                  {agentLabel(a).slice(0, 1).toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-[15px] font-semibold">
-                    {a.agent_id}
+                    <span className="truncate">{agentLabel(a)}</span>
                     {a.published_version ? (
-                      <span className="inline-flex h-5 items-center gap-1 rounded px-1.5 text-[10.5px] font-medium text-[var(--success)]">
+                      <span className="inline-flex h-5 flex-none items-center gap-1 rounded px-1.5 text-[10.5px] font-medium text-[var(--success)]">
                         <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />已发布
                       </span>
                     ) : (
-                      <span className="inline-flex h-5 items-center gap-1 rounded bg-[#F1F5F9] px-1.5 text-[10.5px] font-medium text-[var(--ink-2)]">
+                      <span className="inline-flex h-5 flex-none items-center gap-1 rounded bg-[#F1F5F9] px-1.5 text-[10.5px] font-medium text-[var(--ink-2)]">
                         <span className="h-1.5 w-1.5 rounded-full bg-[#94A3B8]" />草稿
                       </span>
                     )}
                   </div>
-                  <div className="mono mt-1 text-[10.5px] text-[var(--muted)]">{a.agent_id}</div>
+                  <div className="mono mt-1 truncate text-[10.5px] text-[var(--muted)]">{a.agent_id}</div>
                 </div>
                 <div className="ml-auto text-right text-[11px] text-[var(--muted)]">
                   {a.published_version ? (
@@ -143,8 +148,8 @@ export default function Home() {
                   )}
                 </div>
               </div>
-              <div className="mt-3 flex-1 text-[12px] leading-relaxed text-[var(--ink-2)]">
-                {a.agent_id} Agent 业务说明（来自定义）……
+              <div className="mt-3 line-clamp-2 flex-1 text-[12px] leading-relaxed text-[var(--ink-2)]">
+                {a.description?.trim() || `${agentLabel(a)} 业务说明待完善……`}
               </div>
               <div className="mt-3.5 flex items-center gap-1.5">
                 <span className="text-[11px] text-[var(--ink-2)]">组件统计待接入</span>

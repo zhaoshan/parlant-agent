@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from 'react'
 import { ChevronDown } from '../../components/Icons'
 
-export function F({ label, hint, children, full }: { label: string; hint?: string; children: ReactNode; full?: boolean }) {
+export function F({ label, hint, tip, children, full }: { label: string; hint?: string; tip?: string; children: ReactNode; full?: boolean }) {
   return (
     <div className={`flex flex-col gap-1.5 ${full ? 'col-span-full' : ''}`}>
       <label className="text-[12px] font-medium text-[var(--ink-2)]">
@@ -10,6 +10,7 @@ export function F({ label, hint, children, full }: { label: string; hint?: strin
         {hint && <span className="ml-1.5 font-normal text-[var(--muted)]">{hint}</span>}
       </label>
       {children}
+      {tip && <div className="text-[11px] leading-relaxed text-[var(--muted)]">{tip}</div>}
     </div>
   )
 }

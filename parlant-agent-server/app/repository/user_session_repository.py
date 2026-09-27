@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, String, delete, select, text, update
+from sqlalchemy import BigInteger, DateTime, JSON, String, delete, func, or_, and_, select, text, update
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from app.databases import MySqlConnection
@@ -61,6 +61,9 @@ class UserSession(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime)
     updated_at: Mapped[datetime] = mapped_column(DateTime)
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # 会话发起时的变量生效初始快照 {变量名: {"value": 生效值, "source": "override"|"default"}}
+    # （弹窗改了 → override 记修改后值；未改 → default 记 Agent 构建默认值）
+    initial_variables: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
 
 def _utcnow() -> datetime:
@@ -84,6 +87,7 @@ def _row_to_dict(row: UserSession, timeout_seconds: int = 86400) -> dict[str, An
         "created_at": row.created_at,
         "updated_at": row.updated_at,
         "last_message_at": row.last_message_at,
+        "initial_variables": row.initial_variables,
     }
     # 有效性判定（台账侧，不依赖 runtime）
     now = _utcnow()
@@ -135,6 +139,8 @@ class UserSessionRepository:
                 await conn.execute(text("ALTER TABLE user_sessions ADD COLUMN agent_version VARCHAR(64) NULL"))
             if "agent_status" not in cols:
                 await conn.execute(text("ALTER TABLE user_sessions ADD COLUMN agent_status VARCHAR(16) NULL"))
+            if "initial_variables" not in cols:
+                await conn.execute(text("ALTER TABLE user_sessions ADD COLUMN initial_variables JSON NULL"))
 
     # ------------------------------------------------------------ 写
     async def create(
@@ -148,6 +154,7 @@ class UserSessionRepository:
         agent_instance_id: str | None = None,
         agent_version: str | None = None,
         agent_status: str | None = None,
+        initial_variables: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         now = _utcnow()
         row = UserSession(
@@ -160,6 +167,7 @@ class UserSessionRepository:
             title=title,
             status="active",
             source=source,
+            initial_variables=initial_variables,
             created_at=now,
             updated_at=now,
         )
@@ -209,10 +217,16 @@ class UserSessionRepository:
         user_id: str | None = None,
         agent_id: str | None = None,
         source: str | None = None,
+        session_id_like: str | None = None,
+        status_filter: str | None = None,
         limit: int = 200,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """通用查询：按用户 / Agent / 来源渠道过滤；全部条件可空（默认查全量）。"""
+        """通用查询：按用户 / Agent / 来源渠道 / sessionId 模糊 / 有效性状态过滤；全部条件可空。
+
+        `status_filter`：active=进行中（status=active 且未结束且未超时）；ended=已结束
+        （正常结束或超时失效）——与 `_row_to_dict` 的有效性判定保持一致。
+        """
         stmt = select(UserSession)
         if user_id:
             stmt = stmt.where(UserSession.user_id == user_id)
@@ -220,6 +234,28 @@ class UserSessionRepository:
             stmt = stmt.where(UserSession.agent_id == agent_id)
         if source:
             stmt = stmt.where(UserSession.source == source)
+        if session_id_like:
+            stmt = stmt.where(UserSession.session_id.like(f"%{session_id_like}%"))
+        if status_filter:
+            cutoff = _utcnow() - timedelta(seconds=self._timeout_seconds)
+            # 最近活跃 = COALESCE(last_message_at, created_at)
+            last_active = func.coalesce(UserSession.last_message_at, UserSession.created_at)
+            if status_filter == "active":
+                stmt = stmt.where(
+                    and_(
+                        UserSession.status == "active",
+                        UserSession.ended_at.is_(None),
+                        last_active >= cutoff,
+                    )
+                )
+            elif status_filter == "ended":
+                stmt = stmt.where(
+                    or_(
+                        UserSession.status != "active",
+                        UserSession.ended_at.isnot(None),
+                        last_active < cutoff,
+                    )
+                )
         stmt = stmt.order_by(UserSession.updated_at.desc()).offset(offset).limit(limit)
         async with self._mysql.session_factory() as session:
             rows = (await session.execute(stmt)).scalars().all()

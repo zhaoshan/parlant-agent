@@ -9,6 +9,7 @@ import Home from './pages/Home'
 import Observability from './pages/Observability'
 import Placeholder from './pages/Placeholder'
 import Simulate from './pages/Simulate'
+import Versions from './pages/Versions'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -19,10 +20,7 @@ createRoot(document.getElementById('root')!).render(
         {/* 带侧栏 */}
         <Route element={<AppLayout />}>
           <Route path="/build" element={<Build />} />
-          <Route
-            path="/build/versions"
-            element={<Placeholder title="版本历史" desc="历史版本与回滚（阶段4）" backTo="/build" />}
-          />
+          <Route path="/build/versions" element={<Versions />} />
           <Route path="/simulate" element={<Simulate />} />
           <Route
             path="/auto-sim"

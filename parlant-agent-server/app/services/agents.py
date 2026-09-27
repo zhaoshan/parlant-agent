@@ -71,8 +71,13 @@ class AgentDefinitionService:
         loaded = await self._loaded_ids()
         return [{**info, "loaded": info["agent_id"] in loaded} for info in infos]
 
-    async def get(self, agent_id: str) -> dict[str, Any] | None:
-        doc = await self._repo.get_published(agent_id) or await self._latest(agent_id)
+    async def get(self, agent_id: str, version: str | None = None) -> dict[str, Any] | None:
+        """取定义详情；`version` 指定时取该版本（版本对比/diff 用），缺省取 published（无则最新）。"""
+        doc = (
+            await self._repo.get(agent_id, version)
+            if version
+            else await self._repo.get_published(agent_id) or await self._latest(agent_id)
+        )
         if not doc:
             return None
         loaded = await self._loaded_ids()

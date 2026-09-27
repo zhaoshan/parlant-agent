@@ -1,7 +1,7 @@
 # 阶段4：Agent 配置管理模块（并入 parlant-agent-web）
 
 > 目标：在 `parlant-agent-web` 中实现**配置管理模块**（原 parlant-agent-admin 的全部能力并入）——管理 Agent 及其全部上下文工程组件，支持 `agent-definition.json` 导入导出与版本发布/回滚；后端走阶段3 的 `parlant-agent-server /api/agents/*`。
-> 对应学习资料：`docs/02-concepts/*`（逐组件配置含义）、`docs/04-execution-chain/02-核心模块源码地图.md`
+> 对应参考文档：`docs/02-concepts/*`（逐组件配置含义）、`docs/04-execution-chain/02-核心模块源码地图.md`
 > 设计：用 `frontend-design` 或 `ui-ux-pro-max` skill 产出高质感、非模板化的界面（`design/admin/` 已有 4 张高保真设计稿，可复用）。
 > **2026-09-22 调整**：`parlant-agent-admin` 独立应用取消，本阶段从"独立前端工程"改为"parlant-agent-web 的配置管理模块"；后端从 runtime `/admin/*` 改为 server `/api/agents/*`。
 
@@ -10,10 +10,11 @@
 ## 交付物
 
 - `parlant-agent-web` 配置管理模块（React + Vite + Tailwind + shadcn/ui），路由挂 `/admin/*`
-- Agent 列表 / 新建 / 编辑 / 版本 / 发布 / 回滚
+- Agent 列表 / 新建 / 编辑 / 版本 / 发布
 - 各上下文工程组件的配置界面（指南/旅程/变量/术语/话术/工具/检索器/关系）
 - `agent-definition.json` 导入 / 导出
-- 对接 parlant-agent-server 的 `/api/agents/*`（定义 CRUD + 发布/回滚编排）
+- **版本向前 + 版本历史/差异对比**（发布前 diff；快速回滚/渠道部署挪阶段5）
+- 对接 parlant-agent-server 的 `/api/agents/*`（定义 CRUD + 发布编排）
 
 ---
 
@@ -53,9 +54,13 @@
 - 导入：粘贴/上传 JSON → Schema 校验（与后端 pydantic 规则一致）→ 错误定位 → 生成可编辑草稿。
 - 前端先做即时反馈，后端校验为最终准绳。
 
-### 4.5 版本与发布
+### 4.5 版本与发布（版本向前 + 版本历史/差异对比）
+> **2026-09-24 调整**：发布/回滚简化为"**版本永远向前** + 发布前差异对比 + 版本历史查看"；**快速回滚与"版本 × 渠道"部署演进到阶段5 的渠道部署（5.8）**——Agent 编辑页只需看历史版本、做版本差异对比，其余不动。
+
+- **版本永远向前**：发布总是产生新版本（server 自动从已发布 patch+1，或指定唯一版本号），**不做回滚覆盖**——旧版本保留在历史中可查看/对比。
 - 草稿编辑 → 保存（draft，`POST /api/agents`）→ 发布（`POST /api/agents/{id}/publish`，server 推送定义给 runtime 热加载）→ 线上生效。
-- 版本历史列表：版本号/时间/操作人/变更摘要（diff 可选）→ 回滚（`POST /api/agents/{id}/rollback`）。
+- **发布前差异对比**：发布弹窗对「已发布版本 vs 当前草稿」做**结构化 diff**（按板块：基础信息/指南/旅程/变量/术语/话术/工具…列出 新增/删除/修改 清单与计数）；**无任何变更时提醒用户确认是否仍要发布**。
+- **版本历史页**（`/build/versions`）：版本列表（版本号/状态/时间/操作人）+ 与已发布版本/任意两版本的**差异对比**；`POST /api/agents/{id}/rollback` 端点保留（server 已实现，UI 弱化——快速回滚走阶段5 渠道部署）。
 - 发布后给"去聊天窗口试跑"入口（跳转聊天模块并带上该 agent）。
 
 ### 4.6 对接后端

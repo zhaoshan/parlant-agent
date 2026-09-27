@@ -94,7 +94,7 @@ class SessionService:
                 overrides = {"error": f"变量覆盖失败：{exc}"}
         # 2) 绑定实例建会话
         session = await self._runtime.create_session(instance_id, customer_id, title)
-        # 3) 落台账（记录实例/版本/状态）
+        # 3) 落台账（记录实例/版本/状态 + 初始变量生效快照）
         ledger = None
         try:
             ledger = await self._repo.create(
@@ -106,6 +106,7 @@ class SessionService:
                 agent_status=status,
                 title=session.get("title") or title,
                 source=source,
+                initial_variables=await self._build_initial_variables(agent_id, mode, version, variables),
             )
             if mode == "draft":
                 self._draft_sessions[session["id"]] = agent_id
@@ -121,6 +122,50 @@ class SessionService:
             doc = await self._agent_repo.get_published(agent_id)
             return doc.get("version") if doc else None
         except Exception:  # noqa: BLE001
+            return None
+
+    async def _build_initial_variables(
+        self,
+        agent_id: str,
+        mode: str,
+        version: str | None,
+        overrides: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        """会话发起时的变量生效初始快照：`{变量名: {"value": 生效值, "source": "override"|"default"}}`。
+
+        生效值 = 弹窗覆盖（override，记修改后值）；未改 → Agent 构建默认（default）。
+        定义取当前生效版本：draft 模式→草稿定义；published→已发布定义；取不到/无变量返回 None。
+        快照失败不阻断建会话（best-effort）。
+        """
+        if not self._agent_repo:
+            return None
+        try:
+            doc = (
+                await self._agent_repo.get(agent_id, "draft")
+                if mode == "draft"
+                else await self._agent_repo.get_published(agent_id)
+            )
+            if not doc:
+                return None
+            def_vars = ((doc.get("definition") or {}).get("variables") or {}).get("variables") or []
+            snapshot: dict[str, Any] = {}
+            overrides = overrides or {}
+            for v in def_vars:
+                name = v.get("name")
+                if not name:
+                    continue
+                snapshot[name] = (
+                    {"value": overrides[name], "source": "override"}
+                    if name in overrides
+                    else {"value": v.get("default_value"), "source": "default"}
+                )
+            # 兜底：弹窗里可能有定义之外的变量名（标 override 记录）
+            for name, value in overrides.items():
+                if name not in snapshot:
+                    snapshot[name] = {"value": value, "source": "override"}
+            return snapshot or None
+        except Exception as exc:  # noqa: BLE001 - 快照失败不阻断建会话
+            print(f"[session-service] 初始变量快照失败 agent={agent_id}: {type(exc).__name__} {exc}")
             return None
 
     # ------------------------------------------------------------ 草稿实例管理
@@ -195,12 +240,20 @@ class SessionService:
         user_id: str | None = None,
         agent_id: str | None = None,
         source: str | None = None,
+        session_id_like: str | None = None,
+        status_filter: str | None = None,
         limit: int = 200,
         offset: int = 0,
     ) -> dict[str, Any]:
         """会话列表（MySQL 台账，含有效性/来源渠道；条件可空）。"""
         rows = await self._repo.list(
-            user_id=user_id, agent_id=agent_id, source=source, limit=limit, offset=offset
+            user_id=user_id,
+            agent_id=agent_id,
+            source=source,
+            session_id_like=session_id_like,
+            status_filter=status_filter,
+            limit=limit,
+            offset=offset,
         )
         return {"sessions": rows, "count": len(rows)}
 
@@ -236,6 +289,11 @@ class SessionService:
 
     async def post_event(self, session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         """转发发消息/事件；若为 customer message 则 touch 台账并落消息记录。"""
+        # 草稿会话兜底：runtime 重启会清空 @draft 实例（transient 存储），且本进程重启后
+        # _draft_sessions 登记也会丢；发消息前按台账补加载实例，否则引擎
+        # read_agent('{agent_id}@draft') 抛 ItemNotFoundError、消息无响应。
+        if payload.get("kind") == "message" and payload.get("source") == "customer":
+            await self._ensure_session_instance(session_id)
         # 前端 request_id：写入事件 metadata（随事件留存 runtime），并登记 pending 供 SSE 关联 Agent 回复
         request_id = payload.get("metadata", {}).get("request_id") if isinstance(payload.get("metadata"), dict) else None
         event = await self._runtime.post_event(session_id, payload)
@@ -255,6 +313,31 @@ class SessionService:
                     self._note_ledger_error(session_id, exc)
         return event
 
+    async def _ensure_session_instance(self, session_id: str) -> None:
+        """按台账绑定补加载会话的 Agent 实例（主要针对 @draft：runtime 重启后实例丢失）。
+
+        幂等：实例已在 runtime 且草稿指纹未变时 `_ensure_draft_instance` 直接返回；
+        本方法同时把会话重新登记进 `_draft_sessions`，保证关闭/删除后能正确释放实例
+        （本进程重启会丢 `_draft_sessions` 登记，但台账里 agent_instance_id 仍在）。
+        """
+        try:
+            ledger = await self._repo.get(session_id)
+        except Exception:  # noqa: BLE001 - 查不到台账不阻断转发
+            return
+        instance = (ledger or {}).get("agent_instance_id")
+        agent_id = (ledger or {}).get("agent_id")
+        if not instance or not agent_id or not instance.endswith(self.DRAFT_SUFFIX):
+            return
+        # 不能因 _draft_sessions 缓存而跳过：_ensure_draft_instance 内部会向 runtime
+        # list_loaded 确认真实加载状态（runtime 重启会清空 @draft；仅靠本地缓存会误判
+        # "已加载"而跳过 → 后台任务 read_agent('...@draft') 仍 ItemNotFoundError）。
+        # 缓存 _draft_sessions 只用于关闭/删除后的释放登记。
+        try:
+            await self._ensure_draft_instance(agent_id)
+            self._draft_sessions[session_id] = agent_id
+        except Exception as exc:  # noqa: BLE001 - 草稿加载失败不阻断转发（runtime 会回 404）
+            self._note_ledger_error(session_id, exc)
+
     async def list_by_user(self, user_id: str, limit: int = 100) -> dict[str, Any]:
         """按用户查会话列表（MySQL 台账；3.4/3.10）。"""
         rows = await self._repo.list_by_user(user_id, limit=limit)
@@ -268,9 +351,13 @@ class SessionService:
         request_id: str,
         event: dict[str, Any],
     ) -> dict[str, Any] | None:
-        """用户提问记一条（role=customer）。用户提问通常无 langfuse trace_id → 留空。"""
+        """用户提问记一条（role=customer）。用户提问通常无 langfuse trace_id → 留空。
+        无标题会话：首条客户提问自动作为标题（截断 30 字，落台账）——用户进线直接提问时
+        列表也能展示内容而非「未命名会话」。"""
         if not self._msg_repo:
             return None
+        content = str(payload.get("message", ""))
+        await self._ensure_session_title(session_id, content)
         ledger = await self._repo.get(session_id)
         agent_id = (ledger or {}).get("agent_id")
         trace_id = event.get("trace_id")
@@ -281,7 +368,7 @@ class SessionService:
             request_id=request_id,
             message_id=event.get("id") or self._gen_request_id(),
             role="customer",
-            content=str(payload.get("message", "")),
+            content=content,
             user_id=(payload.get("metadata") or {}).get("user_id") if isinstance(payload.get("metadata"), dict) else None,
             user_name=(payload.get("metadata") or {}).get("user_name") if isinstance(payload.get("metadata"), dict) else None,
             agent_id=agent_id,
@@ -290,6 +377,24 @@ class SessionService:
             status="completed",
             event_offset=event.get("offset"),
         )
+
+    async def _ensure_session_title(self, session_id: str, content: str) -> None:
+        """无标题会话：首条客户提问自动作为标题（截断 30 字，落台账）。
+
+        用户进线直接提问时，会话没有 title（建会话时才可能有），列表显示"未命名会话"
+        不可用——以首条提问作为会话展示标题（不覆盖显式标题）。
+        """
+        content = (content or "").strip()
+        if not content:
+            return
+        try:
+            ledger = await self._repo.get(session_id)
+            if not ledger or ledger.get("title"):
+                return
+            title = content if len(content) <= 30 else f"{content[:30]}…"
+            await self._repo.touch(session_id, title=title)
+        except Exception as exc:  # noqa: BLE001 - 标题自动填充失败不影响消息记录/转发
+            self._note_ledger_error(session_id, exc)
 
     async def record_agent_message(self, session_id: str, event: dict[str, Any]) -> dict[str, Any] | None:
         """Agent 每次回复记一条（role=agent）；流式：首条插入、完成更新（幂等 upsert）。"""

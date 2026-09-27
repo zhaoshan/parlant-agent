@@ -5,6 +5,8 @@ export interface AgentInfo {
   agent_id: string
   /** Agent 名称（定义 agent.name；旧定义可能缺失，回退 agent_id） */
   name: string | null
+  /** Agent 业务说明（定义 agent.description；旧定义可能缺失） */
+  description: string | null
   published_version: string | null
   latest_version: string
   latest_status: string
@@ -24,6 +26,15 @@ export interface AgentDetail extends AgentInfo {
   }
   /** 完整定义（agent-definition.json 结构，构建页草稿编辑用） */
   definition: unknown
+}
+
+/** 版本历史条目（GET /api/agents/{id}/versions 返回；不含定义体） */
+export interface AgentVersionInfo {
+  version: string
+  status: string
+  created_by: string | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 /** Agent 定义里的 Context Variable（definition.variables.variables[]；引擎 id 随机生成，这里 id 只是定义层标签） */
@@ -101,4 +112,38 @@ export interface SessionMessage {
   event_offset: number | null
   created_at: string
   updated_at: string
+}
+
+/** langfuse ObservationV2（server /api/traces/{id} 透传的扁平数组项） */
+export interface TraceObservation {
+  id: string
+  traceId: string
+  parentObservationId: string | null
+  isRootObservation?: boolean
+  /** SPAN | GENERATION | EVENT */
+  type: string
+  name: string
+  level?: 'DEBUG' | 'DEFAULT' | 'WARNING' | 'ERROR'
+  statusMessage?: string | null
+  startTime: string
+  endTime?: string | null
+  latency?: number | null
+  traceName?: string | null
+  userId?: string | null
+  sessionId?: string | null
+  input?: unknown
+  output?: unknown
+  metadata?: unknown
+  model?: string | null
+  modelParameters?: Record<string, unknown> | null
+  usageDetails?: {
+    input?: number
+    output?: number
+    total?: number
+    [k: string]: unknown
+  } | null
+  costDetails?: Record<string, unknown> | null
+  totalCost?: number | null
+  promptName?: string | null
+  promptVersion?: number | null
 }

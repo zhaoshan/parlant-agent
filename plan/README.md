@@ -1,6 +1,6 @@
-# Parlant 体系化学习 · 总体实施计划
+# Parlant 生产级客服 Agent 搭建 · 总体实施计划
 
-> 本文是整个学习/开发工程的**总纲**。目标、架构、技术选型、依赖组件、阶段路线都在这里；各阶段细节见对应阶段文档。
+> 本文是整个搭建工程的**总纲**。目标、架构、技术选型、依赖组件、阶段路线都在这里；各阶段细节见对应阶段文档。
 >
 > **2026-09-22 架构调整**：原三应用（admin/server/web）重新划分为 **runtime / server / web**——执行引擎与 BFF 分离，前端收敛为一个应用的两个模块。详见下文「应用划分」。
 
@@ -140,7 +140,7 @@ flowchart LR
 | **阶段2** | 定义转换 + 多 Agent（runtime 内部能力） | `agent-definition.json → parlant 实体` 加载器；Agent 注册表；动态加载/热更新；runtime `/internal/*` API | MongoDB、(Qdrant) |
 | **阶段3** | server BFF + web 聊天窗口 | `parlant-agent-server` 骨架与分包；runtime client（boundary）；会话代理 + SSE 透传；web 聊天页（选 Agent+传 customer、SSE 流式、trace 跳转） | runtime(阶段2) |
 | **阶段4** | web 配置管理模块（原 admin 并入） | Agent CRUD + 各上下文组件配置页 + JSON 导入导出 + 版本发布/回滚；后端走 server `/api/agents/*` | server(阶段3) |
-| **阶段5** | 生产化 + 补充 | 输入审核、人工转交、API 加固、看板、版本/审计、docker 部署；**runtime 生产化：会话状态外置、多 pod、Agent 实例高可用、问答故障转移、消息队列** | 全部 + 可选服务 |
+| **阶段5** | 生产化 + 补充 | 输入审核、人工转交、API 加固、看板、版本/审计、docker 部署；**runtime 生产化：会话状态外置、多 pod、Agent 实例高可用、问答故障转移、消息队列**；**渠道部署（5.8）：版本×渠道部署矩阵 + 快速回滚，钉钉/飞书机器人、web widget 接入（初步）** | 全部 + 可选服务 |
 | **阶段6** | 自动仿真 + 对话测试 | 仿真脚本（名称/客户配置/variables/执行说明）+ 多次执行 + 执行记录；**客户级 Variables 覆盖机制**驱动不同身份走向；产物进追踪与观测 | 阶段3 server + 阶段5 全部 |
 
 **建议里程碑**：阶段1 结束即可"端到端跑通一次带追踪的问答"；阶段2 是整个体系的枢纽，值得投入最多精力；阶段3 完成即形成"web → server → runtime"完整链路。
@@ -160,7 +160,7 @@ flowchart LR
 
 ---
 
-## 七、与 docs/ 学习资料的对应关系
+## 七、与 docs/ 技术参考的对应关系
 
 - 概念与语法 → `docs/02-concepts/*`（配置管理界面逐组件对照）
 - 生产实践 → `docs/03-production/*`（阶段1/5 直接落地）

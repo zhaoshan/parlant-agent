@@ -1,7 +1,7 @@
-# Parlant 框架学习计划（总纲）
+# Parlant 生产级 Agent 搭建计划（总纲）
 
 > 本文档是体系的**主计划**：原始诉求 → 已完成的资料沉淀 → 关键结论 → 待办路线。
-> 详细学习资料见 `docs/`，分阶段实施计划见 `plan/`。最后更新：2026-09-20。
+> 详细技术参考见 `docs/`，分阶段实施计划见 `plan/`。最后更新：2026-09-20。
 
 ---
 
@@ -29,7 +29,7 @@
 - `docs/01-quickstart/`：安装、快速入门示例、设计动机（3 篇）
 - `docs/02-concepts/`：会话、Agent、客户 + 指南/工具/检索器/旅程/关系/术语表/变量/预设话术（11 篇）
 - `docs/03-production/`：Agentic 方法论、输入审核、人工转交、API 增强、官方前端参考、可观测性、FastAPI 扩展（7 篇）
-- `docs/README.md`：学习入口（学习路线 + 全索引 + 中英术语对照表）
+- `docs/README.md`：技术参考入口（推荐阅读路线 + 全索引 + 中英术语对照表）
 
 > 补充：`observability`、`extending-api` 两篇为官网最新内容、本地仓库未收录，已从官网抓取翻译补齐。
 
@@ -85,7 +85,7 @@ flowchart LR
 
 ## 五、参考资源
 
-- 学习手册入口：`docs/README.md`
+- 技术参考入口：`docs/README.md`
 - 实施总纲：`plan/README.md`
 - Parlant 源码：`/Users/zhaoshan/workspace/parlant`（v3.3.1，核心引擎 `src/parlant/core/engines/alpha/engine.py`）
 - Agent schema 样例：`agent-definition.json`（"提前结清"贷款 agent）
@@ -98,7 +98,7 @@ flowchart LR
 <summary>点击查看 2026-09-20 原始诉求原文（含两处 URL 笔误，已在 §3.3 修正）</summary>
 
 ```
-1.先体系化地学习parlant这个框架，包括所有概念和语法（installation/examples/sessions/agents/customers/guidelines/tools/retrievers/journeys/relationships/glossary/variables/canned-responses），梳理成中文文档放 docs/，供学习并作为开发 Agent 指南；
+1.体系化梳理 parlant 框架的所有概念和语法（installation/examples/sessions/agents/customers/guidelines/tools/retrievers/journeys/relationships/glossary/variables/canned-responses），整理成中文技术文档放 docs/，作为开发 Agent 的参考指南；
 2.产品设计开发指南（agentic-design/input-moderation/human-handoff/api-hardening/custom-frontend/observability/extending-api）；
 3.参考源码 /Users/zhaoshan/workspace/parlant，分析业务执行链路（用户提问→上下文工程组件协作→可控可追溯返回），画流程图，梳理到 docs/；
 4.依据资料，为 parlant-agent-admin / parlant-agent-server / parlant-agent-web / langfuse 追踪 拆分可实现的阶段性计划（含数据库/向量库等依赖），放 plan/；可补充未提及的必要能力，随时沟通。

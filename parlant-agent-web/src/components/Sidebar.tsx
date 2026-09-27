@@ -13,16 +13,7 @@ const NAV = [
   { to: '/settings', label: '设置', Icon: GearIcon },
 ]
 
-/** Agent 显示名：优先 agent.name，缺失回退 agent_id。 */
-function agentLabel(a: { agent_id: string; name?: string | null } | null | undefined): string {
-  return a?.name?.trim() || a?.agent_id || '未选择'
-}
-
-/** 头像字母：取显示名首字符（避免展示 code 时看着像缩写）。 */
-function agentInitial(a: { agent_id: string; name?: string | null } | null | undefined): string {
-  const s = agentLabel(a)
-  return s === '未选择' ? '?' : s.slice(0, 1).toUpperCase()
-}
+import { agentInitial, agentLabel } from '../utils/agent'
 
 export default function Sidebar() {
   const navigate = useNavigate()
