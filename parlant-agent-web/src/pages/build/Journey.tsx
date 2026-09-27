@@ -9,9 +9,15 @@ const NODE_COLOR: Record<string, { bg: string; text: string }> = {
   chat: { bg: '#EEF2FF', text: '#4F46E5' },
   tool: { bg: '#ECFDF5', text: '#059669' },
   fork: { bg: '#FFFBEB', text: '#B45309' },
-  end: { bg: '#F1F5F9', text: '#475569' },
 }
 const gid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
+/** 查重重抽：与现有 id 冲突则重抽（Math.random 不保证唯一，撞号会导致引擎静默覆盖状态节点） */
+const uniqueGid = (p: string, existing: Iterable<string>) => {
+  const taken = new Set(existing)
+  let id = gid(p)
+  while (taken.has(id)) id = gid(p)
+  return id
+}
 
 /** 组合模式（loader 只认这 4 个值；loose 无效会静默回落 fluid，故不提供） */
 const COMPOSITION_OPTIONS = [
@@ -28,6 +34,12 @@ export default function Journey() {
   const [journeyId, setJourneyId] = useState<string | null>(null)
   const [view, setView] = useState<'form' | 'graph'>('form')
   const [infoOpen, setInfoOpen] = useState(false)
+  const [stateFilter, setStateFilter] = useState('')
+  // 全定义已占用 id（旅程 + 全部状态节点），新建时查重重抽，防跨旅程/节点撞号
+  const takenIds = useMemo(
+    () => new Set((definition?.journeys?.journeys ?? []).flatMap((j) => [j.id, ...(j.states ?? []).map((s) => s.id)])),
+    [definition],
+  )
   if (!definition) return null
   const journeys = definition.journeys?.journeys ?? []
   const jid = journeyId && journeys.some((j) => j.id === journeyId) ? journeyId : journeys[0]?.id ?? null
@@ -47,8 +59,8 @@ export default function Journey() {
     })
   }
   const newJourney = () => {
-    const id = gid('jny')
-    const entry = gid('sta')
+    const id = uniqueGid('jny', takenIds)
+    const entry = uniqueGid('sta', takenIds)
     update((d) =>
       d.journeys!.journeys.push({
         id,
@@ -88,6 +100,12 @@ export default function Journey() {
   const toolOptions = (definition.tools?.tools ?? []).map((t) => ({ value: t.id ?? t.name, label: t.name }))
   const cannedOptions = (definition.canned_responses?.responses ?? []).map((c) => ({ value: c.id, label: c.template.slice(0, 36) }))
   const retrieverOptions = (definition.retrievers?.retrievers ?? []).map((r) => ({ value: r.id, label: r.title }))
+
+  // 状态筛选（id / 名称，大小写不敏感）
+  const filterQ = stateFilter.trim().toLowerCase()
+  const filteredStates = filterQ
+    ? states.filter((s) => s.id.toLowerCase().includes(filterQ) || (s.title ?? '').toLowerCase().includes(filterQ))
+    : states
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -152,11 +170,26 @@ export default function Journey() {
         {/* 状态列表 */}
         <div className="flex w-[280px] flex-none flex-col border-r border-[var(--line)] bg-[var(--surface)]">
           <div className="flex items-center px-3 py-2 text-[11px] font-semibold text-[var(--muted)]">
-            状态（{states.length}）
-            <button className="ml-auto cursor-pointer text-[11px] font-normal text-[var(--primary)]" onClick={() => { const id = gid('sta'); update((d) => { const j = d.journeys!.journeys.find((x) => x.id === journey.id); j?.states?.push({ id, title: '新节点', type: 'chat', chat_state: '', transitions: [] }) }); setSelected(id) }}>＋ 新建节点</button>
+            状态（{filteredStates.length}{filterQ ? ` / ${states.length}` : ''}）
+            <button className="ml-auto cursor-pointer text-[11px] font-normal text-[var(--primary)]" onClick={() => { const id = uniqueGid('sta', takenIds); update((d) => { const j = d.journeys!.journeys.find((x) => x.id === journey.id); j?.states?.push({ id, title: '新节点', type: 'chat', chat_state: '', transitions: [] }) }); setSelected(id) }}>＋ 新建节点</button>
+          </div>
+          <div className="px-2 pb-1.5">
+            <div className="relative">
+              <svg className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[var(--muted)]" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              <input
+                className="h-7 w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg)] pl-7 pr-6 text-[11.5px] outline-none focus:border-[var(--primary-line)]"
+                placeholder="筛选 id / 名称"
+                value={stateFilter}
+                onChange={(e) => setStateFilter(e.target.value)}
+              />
+              {filterQ && (
+                <button className="absolute right-1.5 top-1/2 -translate-y-1/2 cursor-pointer text-[12px] text-[var(--muted)] hover:text-[var(--ink)]" title="清空筛选" onClick={() => setStateFilter('')}>✕</button>
+              )}
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto px-2 pb-2">
-            {states.map((s) => {
+            {filteredStates.length === 0 && <div className="px-3 py-6 text-center text-[11.5px] text-[var(--muted)]">无匹配状态</div>}
+            {filteredStates.map((s) => {
               const color = NODE_COLOR[s.type] ?? NODE_COLOR.chat
               return (
                 <div key={s.id} className={`mb-0.5 flex cursor-pointer items-center gap-2 rounded-md border px-2.5 py-2 ${selectedId === s.id ? 'border-[var(--primary-line)] bg-[var(--primary-weak)]' : 'border-transparent hover:bg-[var(--bg)]'}`} onClick={() => setSelected(s.id)}>
@@ -187,7 +220,7 @@ export default function Journey() {
                   <F label="标题"><TextInput value={curState.title} onChange={(v) => updateState(curState.id, { title: v })} /></F>
                   <div className="mt-3">
                     <F label="节点类型">
-                      <Select value={curState.type} onChange={(v) => updateState(curState.id, { type: v as JourneyStateDef['type'] })} options={[{ value: 'chat', label: 'chat 对话' }, { value: 'tool', label: 'tool 工具' }, { value: 'fork', label: 'fork 分支' }, { value: 'end', label: 'end 终态' }]} />
+                      <Select value={curState.type} onChange={(v) => updateState(curState.id, { type: v as JourneyStateDef['type'] })} options={[{ value: 'chat', label: 'chat 对话' }, { value: 'tool', label: 'tool 工具' }, { value: 'fork', label: 'fork 分支' }]} />
                     </F>
                   </div>
                   <div className="mt-3">
@@ -359,8 +392,10 @@ function GraphView(props: { journey: JourneyDef; selectedId: string | null; onPi
   const warnings: string[] = []
   if (!journey.entry_node) warnings.push('缺少入口节点（entry_node）')
   for (const s of journey.states ?? []) {
-    if (s.type !== 'end' && (s.transitions ?? []).length === 0) warnings.push(`「${s.title}」无出边（可能为死节点，若为终态请设 type=end）`)
-    if (s.type === 'end' && (s.transitions ?? []).length > 0) warnings.push(`终态「${s.title}」不应有出边`)
+    // 终态 = 无出边的普通状态（loader 自动接 END_JOURNEY），此处只查悬空出边
+    for (const t of s.transitions ?? []) {
+      if (t.to && !journey.states?.some((x) => x.id === t.to)) warnings.push(`「${s.title}」的出边指向不存在的状态 ${t.to}`)
+    }
   }
 
   const layers = [...new Set([...layout.values()].map((p) => p.layer))].sort((a, b) => a - b)

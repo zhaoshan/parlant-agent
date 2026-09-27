@@ -65,7 +65,7 @@ export interface JourneyStateDef {
   id: string
   title: string
   description?: string
-  type: 'chat' | 'tool' | 'fork' | 'end'
+  type: 'chat' | 'tool' | 'fork'
   chat_state?: string
   tool_instruction?: string
   priority?: number

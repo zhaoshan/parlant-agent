@@ -79,6 +79,13 @@ function TableView<T extends Row>(props: {
 }
 
 const gid = (p: string) => `${p}_${Math.random().toString(36).slice(2, 8)}`
+/** 查重重抽：生成 id 若与现有行冲突则重抽（Math.random 不保证唯一，撞号会导致引擎静默覆盖） */
+const uniqueGid = (p: string, existing: Iterable<string>) => {
+  const taken = new Set(existing)
+  let id = gid(p)
+  while (taken.has(id)) id = gid(p)
+  return id
+}
 
 /* ---------------- 变量 ---------------- */
 export function Variables() {
@@ -94,7 +101,7 @@ export function Variables() {
       rows={rows}
       selectedId={selectedId}
       onSelect={setSelected}
-      onAdd={() => { const id = gid('var'); setRows((a) => [...a, { id, name: '', type: 'boolean', description: '' }]); setSelected(id) }}
+      onAdd={() => { const id = uniqueGid('var', rows.map((r) => r.id)); setRows((a) => [...a, { id, name: '', type: 'boolean', description: '' }]); setSelected(id) }}
       onDelete={(id) => setRows((a) => a.filter((v) => v.id !== id))}
       cols={[
         { key: 'name', header: '名称', render: (v) => <span className="mono font-medium text-[var(--ink)]">{v.name || '—'}</span> },
@@ -153,7 +160,7 @@ export function Glossary() {
       rows={rows}
       selectedId={selectedId}
       onSelect={setSelected}
-      onAdd={() => { const id = gid('gls'); setRows((a) => [...a, { id, name: '', description: '' }]); setSelected(id) }}
+      onAdd={() => { const id = uniqueGid('gls', rows.map((r) => r.id)); setRows((a) => [...a, { id, name: '', description: '' }]); setSelected(id) }}
       onDelete={(id) => setRows((a) => a.filter((x) => x.id !== id))}
       cols={[
         { key: 'name', header: '词条', render: (t) => <span className="font-medium text-[var(--ink)]">{t.name}</span> },
@@ -190,7 +197,7 @@ export function Canned() {
       rows={rows}
       selectedId={selectedId}
       onSelect={setSelected}
-      onAdd={() => { const id = gid('rsp'); setRows((a) => [...a, { id, template: '' }]); setSelected(id) }}
+      onAdd={() => { const id = uniqueGid('rsp', rows.map((r) => r.id)); setRows((a) => [...a, { id, template: '' }]); setSelected(id) }}
       onDelete={(id) => setRows((a) => a.filter((x) => x.id !== id))}
       cols={[
         { key: 'template', header: '模板', render: (c) => <span className="block max-w-[320px] truncate whitespace-nowrap">{c.template || '（空模板）'}</span> },
@@ -231,7 +238,7 @@ export function Tools() {
       rows={rows}
       selectedId={selectedId}
       onSelect={setSelected}
-      onAdd={() => { const id = gid('tool'); setRows((a) => [...a, { id, name: '', description: '', source: 'remote' }]); setSelected(id) }}
+      onAdd={() => { const id = uniqueGid('tool', rows.map((r) => r.id)); setRows((a) => [...a, { id, name: '', description: '', source: 'remote' }]); setSelected(id) }}
       onDelete={(id) => setRows((a) => a.filter((x) => x.id !== id))}
       cols={[
         { key: 'name', header: '名称', render: (t) => <span className="mono font-medium text-[var(--ink)]">{t.name}</span> },
@@ -276,7 +283,7 @@ export function Retrievers() {
       rows={rows}
       selectedId={selectedId}
       onSelect={setSelected}
-      onAdd={() => { const id = gid('rtr'); setRows((a) => [...a, { id, title: '', description: '', type: 'ragflow_http' }]); setSelected(id) }}
+      onAdd={() => { const id = uniqueGid('rtr', rows.map((r) => r.id)); setRows((a) => [...a, { id, title: '', description: '', type: 'ragflow_http' }]); setSelected(id) }}
       onDelete={(id) => setRows((a) => a.filter((x) => x.id !== id))}
       cols={[
         { key: 'title', header: '名称', render: (r) => <span className="font-medium text-[var(--ink)]">{r.title}</span> },

@@ -12,12 +12,14 @@ agent_bootstrap.py 一致（glossary/canned/variables/journeys/guidelines/tools�
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
+import structlog
 import parlant.sdk as p
 from parlant.sdk import _Tag
 from parlant.core.agents import AgentStore
 from parlant.core.canned_responses import CannedResponseStore
+from parlant.core.common import ItemNotFoundError
 from parlant.core.context_variables import ContextVariableStore
 from parlant.core.glossary import GlossaryStore
 from parlant.core.guidelines import GuidelineStore
@@ -26,6 +28,8 @@ from parlant.core.relationships import RelationshipStore
 
 from app.models.definition import AgentDefinition, GuidelineDef, JourneyDef
 from app.services.builtin_tools import resolve_tool, set_runtime_services
+
+logger = structlog.get_logger()
 
 _COMPOSITION_MODES = {
     "fluid": p.CompositionMode.FLUID,
@@ -120,6 +124,26 @@ class AgentLoader:
             asyncio.create_task(self._evaluate_journey(journey))
 
     async def _evaluate_journey(self, journey: p.Journey) -> None:
+        # —— 评估诊断日志（2026-09-27 排查草稿热加载评估）：哈希 + cache 命中预判 + 用时 + 分叉数 ——
+        import time as _time
+
+        t0 = _time.monotonic()
+        _hash = ""
+        cache_hit = None
+        try:
+            _hash = self._server._evaluator._hash_journey_evaluation_request(  # noqa: SLF001
+                journey=journey
+            )
+            cached = await self._server._evaluator._journey_collection.find_one(  # noqa: SLF001
+                {"id": {"$eq": _hash}}
+            )
+            cache_hit = cached is not None
+        except Exception as exc:  # noqa: BLE001 - 诊断失败不影响评估
+            logger.warning(f"[eval诊断] 哈希/命中预判失败 {journey.id}: {exc}")
+        logger.info(
+            f"[eval诊断] 旅程评估开始 id={journey.id} title={journey.title} "
+            f"hash={(_hash or '?')[:8]} cache命中预判={cache_hit}"
+        )
         try:
             result = await asyncio.wait_for(
                 self._server._evaluator.evaluate_journey(journey),  # noqa: SLF001
@@ -128,8 +152,20 @@ class AgentLoader:
             await self._server._apply_single_evaluation(  # noqa: SLF001
                 "journey", journey.id, result
             )
+            fu_counts = {
+                nid: len(np.get("journey_node", {}).get("reachable_follow_ups") or [])
+                for nid, np in (result.node_properties or {}).items()
+            }
+            logger.info(
+                f"[eval诊断] 旅程评估完成 id={journey.id} 用时={_time.monotonic() - t0:.1f}s "
+                f"分叉数={fu_counts}"
+            )
             print(f"✅ 旅程评估完成：{journey.title} ({journey.id})，分叉条件表已就绪", flush=True)
         except Exception as exc:  # noqa: BLE001 - 评估失败仅影响分叉推进
+            logger.info(
+                f"[eval诊断] 旅程评估失败 id={journey.id} 用时={_time.monotonic() - t0:.1f}s "
+                f"错误={type(exc).__name__}: {exc}"
+            )
             print(f"⚠️ 旅程评估失败（分叉推进可能退化）：{journey.id}: {exc}", flush=True)
 
     async def unload(self, agent_id: str) -> bool:
@@ -275,22 +311,45 @@ class AgentLoader:
         )
 
         state_map: dict[str, p.JourneyState] = {}
+        node_store = self._server.container[JourneyStore]
         for s in journey_def.states:
             stype = _STATE_TYPES.get(s.type, p.ChatJourneyState)
             tools = [resolve_tool(t) for t in s.tool_state]
             action = s.chat_state or s.tool_instruction or None
-            state_map[s.id] = await journey._create_state(  # noqa: SLF001 见 agent_bootstrap
+            state_id = p.JourneyStateId(f"{s.id}{suffix}")
+            # [跨定义撞号防御·2026-09-27] load() 幂等：本实例旧实体已在开头删净，此时
+            # 全局存储里仍存在的同 id 节点必属其它 Agent/定义。JourneyStore 对重复
+            # 节点 id 是 insert_one 静默覆盖（曾因此互相污染），这里改为显式拒绝，
+            # 把污染挡在发生前（前端 gid 已带定义内查重，此为最后防线）。
+            try:
+                await node_store.read_node(state_id)
+            except ItemNotFoundError:
+                pass
+            else:
+                raise RuntimeError(
+                    f"旅程状态 id '{state_id}' 已存在于引擎全局存储（跨 Agent/定义撞号），"
+                    "继续加载会静默覆盖其它定义的状态；请修改该状态 id 后重新保存/发布。"
+                )
+            state_map[s.id] = state = await journey._create_state(  # noqa: SLF001 见 agent_bootstrap
                 stype,
                 action=action,
                 description=s.description or s.title or None,
                 tools=tools,
                 composition_mode=_composition_mode(s.composition_mode),
-                id=p.JourneyStateId(f"{s.id}{suffix}"),
+                id=state_id,
                 labels=s.labels,
             )
+            # [评估哈希修复·2026-09-27] SDK 的 _create_state 只写 store、不追加进
+            # journey.states；而评估哈希 _hash_journey_evaluation_request 用的正是
+            # journey.states/transitions → 不补齐则哈希只含根节点（常量），结构怎么改
+            # 都命中首次评估、永不重评估（曾导致草稿加状态后仍用旧分叉表）。此处手动补齐。
+            cast(list, journey.states).append(state)
 
+        created_transitions: list = []
         if journey_def.entry_node and journey_def.entry_node in state_map:
-            await journey.create_transition(None, journey.initial_state, state_map[journey_def.entry_node])
+            created_transitions.append(
+                await journey.create_transition(None, journey.initial_state, state_map[journey_def.entry_node])
+            )
 
         for s in journey_def.states:
             source = state_map[s.id]
@@ -298,16 +357,22 @@ class AgentLoader:
                 target = state_map.get(t.to)
                 # 注：v3.3.1 create_transition 不支持 canned_responses（转移话术走节点指南机制，
                 # 留待后续）；样例定义转移级 canned_responses 为空，此处仅连 condition/to。
-                await journey.create_transition(
-                    t.condition or None,
-                    source,
-                    target if target is not None else p.END_JOURNEY,
+                created_transitions.append(
+                    await journey.create_transition(
+                        t.condition or None,
+                        source,
+                        target if target is not None else p.END_JOURNEY,
+                    )
                 )
 
         targeted = {t.to for s in journey_def.states for t in s.transitions}
         for s in journey_def.states:
             if not s.transitions and s.id not in targeted:
-                await journey.create_transition(None, state_map[s.id], p.END_JOURNEY)
+                created_transitions.append(
+                    await journey.create_transition(None, state_map[s.id], p.END_JOURNEY)
+                )
+        # [评估哈希修复] 同上：补齐 transitions 使评估哈希反映真实结构
+        cast(list, journey.transitions).extend(created_transitions)
 
         return journey
 
