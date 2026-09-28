@@ -22,6 +22,28 @@ SDK 的评估-应用流程（`_process_evaluations → _apply_single_evaluation`
 
 > **对照：为什么官方示例（healthcare.py 等）不需要这套。** 示例是"同步脚本"模式——`async with p.Server() as server:` 块内创建全部实体（`create_journey` / `create_guideline` 返回前即把实体注册进 `_journey_evaluations` / `_guideline_evaluations`，sdk.py:5459），块退出时 `Server.__aexit__` 自动 `_process_evaluations()` 一次性评估+应用（sdk.py:4325），且顺序是**先评估（4325）→ 再索引（4331）→ 最后才起 HTTP（4340）** → 分叉表在第一条请求前已就位，运行期 fork 直接读表。缓存对示例只是"首次 miss、之后命中"，结构固定、无多实例，§3.6 的哈希常量缺陷碰不到。本架构是**常驻服务 + 热加载**，实体创建发生在 `__aexit__` 早已过去之后，才需要自建这套补评估。
 
+## 二点五、tool 节点的 REEVALUATION 关系（"分支依赖工具结果"的前提）★
+
+**问题背景**（2026-09-28 走通 tool→fork）：tool 节点（如 counter）后接 fork 按工具结果路由，但 tool 节点滞留、fork 不推进——迭代2 就地吐一句，下一条消息才路由。
+
+**机制**：迭代2 `_run_additional_preparation_iteration` 靠 `find_guidelines_that_need_reevaluation`（`entity_cq.py:390`）**反查「journey_node_tag → tool」的 REEVALUATION 关系**来重建旅程批处理、推进 tool 出边。若关系缺失 → 重评估返回 0 条（实测 `engine.reeval reevaluate=0`）→ 旅程批处理不跑 → tool 出边不推进。
+
+**根因**：REEVALUATION 关系**只在 SDK 的 `_transition()`（fluent API，sdk.py:1520）里创建**；直接用 `journey._create_state` + `create_transition` 装配（我们的 `agent_loader.py`）会绕过它 → 关系缺失。
+
+**修复（loader 必做）**：建 tool 状态时按 SDK 同款补建（`agent_loader.py _build_journey`）：
+```python
+await relationship_store.create_relationship(
+    source=RelationshipEntity(id=_Tag.for_journey_node_id(state.id).id, kind=RelationshipEntityKind.TAG_ALL),
+    target=RelationshipEntity(id=_tool_ref_to_id(t), kind=RelationshipEntityKind.TOOL),
+    kind=RelationshipKind.REEVALUATION,
+)
+```
+`create_relationship` 是 upsert（`core/relationships.py`），reload 幂等。**任何"分支依赖工具结果"的旅程都依赖这条关系，勿省略。**
+
+**与评估的关系**：关系不在旅程哈希（`journey.id : state_ids : edge_ids`）里——补建关系**不触发重评估**、不改哈希；修后 `reevaluate=32`（全部旅程节点投影），迭代2 fork 正常路由（`next_step current=10 命中条件[2] -> path=['12','9']`）。
+
+**诊断**：看 `[parlant-agent] engine.reeval session=... reevaluate=N`——修复前 0、修复后 = 旅程节点数。详见 `docs/to-follow-up/挽留计数与工具职责.md` §2.3。
+
 ## 三、evaluation_cache.json 缓存机制
 
 文件位置：`parlant-agent-runtime/parlant-data/evaluation_cache.json`（`PARLANT_HOME` 下）。顶层两个集合，集合名带版本号（跨 Parlant 版本隔离）：

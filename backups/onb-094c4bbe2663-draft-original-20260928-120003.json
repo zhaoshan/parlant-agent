@@ -1,0 +1,1011 @@
+{
+  "agent": {
+    "boundary": {
+      "allowed": [],
+      "emergency_action": "",
+      "prohibited": []
+    },
+    "composition_mode": "fluid",
+    "default_language": "zh-CN",
+    "description": "客户在贷款分期业务后，如果需要提前还款，需要进行资格判定，符合资格的用户才可以办理结清业务。",
+    "id": "onb-094c4bbe2663",
+    "metadata": {},
+    "name": "提前结清（测试样板）",
+    "preamble": [],
+    "tags": [],
+    "utterances": {
+      "greeting": [],
+      "preamble": [],
+      "system_error_fallback": "",
+      "timeout_fallback": ""
+    },
+    "version": "2.0.1"
+  },
+  "canned_responses": {
+    "responses": [
+      {
+        "bound_to": "",
+        "description": "",
+        "field_dependencies": [],
+        "id": "rsp_yrUDel",
+        "metadata": {},
+        "signals": [],
+        "tags": [],
+        "template": "你好，我是提前结清助手，只能帮助办理提前结清业务。如需办理其他业务，我们会给您转人工处理。",
+        "title": "rsp_yrUDel",
+        "usage_context": ""
+      },
+      {
+        "bound_to": "",
+        "description": "",
+        "field_dependencies": [],
+        "id": "rsp_Rsn5SI",
+        "metadata": {},
+        "signals": [],
+        "tags": [],
+        "template": "您的诉求已经收到，我们高度重视您的问题，为了给您带来更好的体验，优先为您接入人工客服服务。",
+        "title": "rsp_Rsn5SI",
+        "usage_context": ""
+      }
+    ]
+  },
+  "experience_criteria": null,
+  "faqs": null,
+  "glossary": {
+    "glossary": [
+      {
+        "bound_to": "",
+        "description": "客户办理金融贷款业务后，在约定还款日之前要一次性还清贷款",
+        "id": "gls_cFzBut",
+        "metadata": {},
+        "name": "提前结清",
+        "synonyms": [
+          "提前还款,结清,一次性还款"
+        ],
+        "tags": []
+      }
+    ]
+  },
+  "guidelines": {
+    "guidelines": [
+      {
+        "action": "祝福客户生活愉快，并结束对话",
+        "canned_responses": [],
+        "category": "global",
+        "composition_mode": "fluid",
+        "condition": "完成核心业务交互后，用户提出结束对话或不再联系的要求",
+        "criticality": "medium",
+        "dependencies": [],
+        "description": "",
+        "enabled": true,
+        "id": "gdl_6qMSri",
+        "journey_ids": [],
+        "labels": [],
+        "metadata": {},
+        "node_ids": [],
+        "priority": 1,
+        "retrievers": [],
+        "scope": "",
+        "tags": [],
+        "title": "",
+        "tools": [],
+        "track": true,
+        "trigger_observations": [],
+        "variable_conditions": [],
+        "variable_updates_on_match": []
+      },
+      {
+        "action": "以友好、专业的语气进行欢迎，主动询问用户要办理哪个业务，控制在两句话内。不要提示当前只能办理提前结清。",
+        "canned_responses": [],
+        "category": "global",
+        "composition_mode": "fluid",
+        "condition": "用户首次进入对话，或发送问候语如‘你好’、‘您好’、‘哈喽’等表达初始接触意图",
+        "criticality": "medium",
+        "dependencies": [],
+        "description": "",
+        "enabled": true,
+        "id": "gdl_7vYF4Y",
+        "journey_ids": [],
+        "labels": [],
+        "metadata": {},
+        "node_ids": [],
+        "priority": 1,
+        "retrievers": [],
+        "scope": "",
+        "tags": [],
+        "title": "",
+        "tools": [],
+        "track": true,
+        "trigger_observations": [],
+        "variable_conditions": [],
+        "variable_updates_on_match": []
+      },
+      {
+        "action": "告知当前的业务办理范围",
+        "canned_responses": [
+          "rsp_yrUDel"
+        ],
+        "category": "global",
+        "composition_mode": "fluid",
+        "condition": "客户办理的业务，不是提前结清的业务",
+        "criticality": "medium",
+        "dependencies": [],
+        "description": "",
+        "enabled": true,
+        "id": "gdl_QfxMAn",
+        "journey_ids": [],
+        "labels": [],
+        "metadata": {},
+        "node_ids": [],
+        "priority": 1,
+        "retrievers": [],
+        "scope": "",
+        "tags": [],
+        "title": "",
+        "tools": [],
+        "track": true,
+        "trigger_observations": [],
+        "variable_conditions": [],
+        "variable_updates_on_match": []
+      },
+      {
+        "action": "转人工",
+        "canned_responses": [
+          "rsp_Rsn5SI"
+        ],
+        "category": "global",
+        "composition_mode": "fluid",
+        "condition": "如果客户表达投诉意向",
+        "criticality": "medium",
+        "dependencies": [],
+        "description": "",
+        "enabled": true,
+        "id": "gdl_VrXi0E",
+        "journey_ids": [],
+        "labels": [],
+        "metadata": {},
+        "node_ids": [],
+        "priority": 10,
+        "retrievers": [],
+        "scope": "",
+        "tags": [],
+        "title": "",
+        "tools": [],
+        "track": true,
+        "trigger_observations": [],
+        "variable_conditions": [],
+        "variable_updates_on_match": []
+      },
+      {
+        "action": "进行解释说明，当前我们只能一个合同一个合同办理",
+        "canned_responses": [],
+        "category": "global",
+        "composition_mode": "fluid",
+        "condition": "在客户名下有合同的节点后，如果客户选择多个合同或者要求全部结清",
+        "criticality": "medium",
+        "dependencies": [],
+        "description": "",
+        "enabled": true,
+        "id": "gdl_sQEWSc",
+        "journey_ids": [
+          "jny_LuAwQZ"
+        ],
+        "labels": [],
+        "metadata": {},
+        "node_ids": [],
+        "priority": 1,
+        "retrievers": [],
+        "scope": "",
+        "tags": [],
+        "title": "",
+        "tools": [],
+        "track": true,
+        "trigger_observations": [],
+        "variable_conditions": [],
+        "variable_updates_on_match": []
+      }
+    ]
+  },
+  "journeys": {
+    "journeys": [
+      {
+        "bound_to": "",
+        "business_goal": "",
+        "composition_mode": "fluid",
+        "dependencies": [],
+        "description": "客户进行提前结清业务办理",
+        "entry_node": "sta_4h4nEZ",
+        "id": "jny_LuAwQZ",
+        "labels": [],
+        "metadata": {},
+        "priority": 1,
+        "retrievers": [],
+        "sop_type": "main",
+        "states": [
+          {
+            "canned_responses": [],
+            "chat_state": "客户名下存在多个合同，让用户去选择合同。\n从变量orderList取出合同的相关信息。",
+            "composition_mode": "fluid",
+            "description": "客户名下存在有效合同",
+            "id": "sta_PwWIUu",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "选择要办理的合同",
+            "tool_instruction": "客户名下存在多个合同，让用户去选择合同。\n从变量orderList取出合同的相关信息。",
+            "tool_state": [],
+            "transitions": [
+              {
+                "canned_responses": [],
+                "condition": "用户选择一个合同后",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_3jNGRI",
+                "topic_terms": [],
+                "transition_id": "txn_voTKnO",
+                "variable_conditions": []
+              }
+            ],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "- 告知客户挽留话术，从下列话术中选择：\n“亲亲，一次性全部结清还款压力很大，按期还款还可以为您积累信用，赢得更多提额机会。建议您继续按期还款呢”\n“亲亲，按期还款负担最小，建议您再考虑一下呢”",
+            "composition_mode": "fluid",
+            "description": "客户满足办理条件，需要进行挽留",
+            "id": "sta_2CzzvY",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "挽留",
+            "tool_instruction": "- 告知客户挽留话术，从下列话术中选择：\n“亲亲，一次性全部结清还款压力很大，按期还款还可以为您积累信用，赢得更多提额机会。建议您继续按期还款呢”\n“亲亲，按期还款负担最小，建议您再考虑一下呢”",
+            "tool_state": [],
+            "transitions": [
+              {
+                "canned_responses": [],
+                "condition": "客户拒绝挽留",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_N4xD0A",
+                "topic_terms": [],
+                "transition_id": "txn_xKg4pX",
+                "variable_conditions": []
+              },
+              {
+                "canned_responses": [],
+                "condition": "客户同意挽留",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_njUq9v",
+                "topic_terms": [],
+                "transition_id": "txn_M6uojv",
+                "variable_conditions": []
+              }
+            ],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "确定客户拒绝挽留的次数，如果客户拒绝两次，进行预约办理",
+            "composition_mode": "fluid",
+            "description": "计算拒绝挽留次数",
+            "id": "sta_N4xD0A",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "挽留次数计算",
+            "tool_instruction": "确定客户拒绝挽留的次数，如果客户拒绝两次，进行预约办理",
+            "tool_state": [
+              "journey_node_counter"
+            ],
+            "transitions": [
+              {
+                "canned_responses": [],
+                "condition": "客户拒绝挽留次数<2次",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_2CzzvY",
+                "topic_terms": [],
+                "transition_id": "txn_zf1QlR",
+                "variable_conditions": []
+              },
+              {
+                "canned_responses": [],
+                "condition": "客户拒绝挽留次数大于等于2次",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_J04Tro",
+                "topic_terms": [],
+                "transition_id": "txn_I3m3tx",
+                "variable_conditions": []
+              }
+            ],
+            "type": "tool",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "当前办理提前结清需要先进行预约，并在预约之后再次进线办理",
+            "composition_mode": "fluid",
+            "description": "当前办理提前结清需要先进行预约",
+            "id": "sta_J04Tro",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "预约办理",
+            "tool_instruction": "当前办理提前结清需要先进行预约，并在预约之后再次进线办理",
+            "tool_state": [],
+            "transitions": [
+              {
+                "canned_responses": [],
+                "condition": "客户同意预约",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_ENoopJ",
+                "topic_terms": [],
+                "transition_id": "txn_RNvB67",
+                "variable_conditions": []
+              },
+              {
+                "canned_responses": [],
+                "condition": "客户不同意预约且仍坚持立即结清",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_kQ3mZ9",
+                "topic_terms": [],
+                "transition_id": "txn_X7w2Qz",
+                "variable_conditions": []
+              }
+            ],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "告知客户预约办理结果：您的合同，已经预约一周后的某个办理时间，请在预约时间当天办理。并询问客户是否还有什么需要帮助的。",
+            "composition_mode": "fluid",
+            "description": "客户同意预约办理",
+            "id": "sta_ENoopJ",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "客户同意预约",
+            "tool_instruction": "告知客户预约办理结果：您的合同，已经预约一周后的某个办理时间，请在预约时间当天办理。并询问客户是否还有什么需要帮助的。",
+            "tool_state": [],
+            "transitions": [],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "进行友好答复，并转人工。如：亲亲，您的诉求已经收到，我们高度重视您的问题，为了给您带来更好的体验，优先为您接入人工客服服务。",
+            "composition_mode": "fluid",
+            "description": "客户为敏感客户",
+            "id": "sta_87qC5m",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "敏感身份",
+            "tool_instruction": "进行友好答复，并转人工。如：亲亲，您的诉求已经收到，我们高度重视您的问题，为了给您带来更好的体验，优先为您接入人工客服服务。",
+            "tool_state": [],
+            "transitions": [],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "需要告知客户：未查询到您在我司存在有效合同信息，建议您确认您要办理的合同是否为我司业务",
+            "composition_mode": "fluid",
+            "description": "客户名下没有有效合同",
+            "id": "sta_kCM1ob",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "客户名下无合同",
+            "tool_instruction": "需要告知客户：未查询到您在我司存在有效合同信息，建议您确认您要办理的合同是否为我司业务",
+            "tool_state": [],
+            "transitions": [],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "",
+            "composition_mode": "fluid",
+            "description": "客户身份核验和合同数量判定",
+            "id": "sta_4h4nEZ",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "客户身份核验和合同数量判定",
+            "tool_instruction": "",
+            "tool_state": [],
+            "transitions": [
+              {
+                "canned_responses": [],
+                "condition": "客户身份为敏感客户，isSensitive为true",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_87qC5m",
+                "topic_terms": [],
+                "transition_id": "txn_57PUKC",
+                "variable_conditions": []
+              },
+              {
+                "canned_responses": [],
+                "condition": "客户身份isSensitive为false且合同数量orderNum为0",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_kCM1ob",
+                "topic_terms": [],
+                "transition_id": "txn_Dtn2Vh",
+                "variable_conditions": []
+              },
+              {
+                "canned_responses": [],
+                "condition": "客户身份isSensitive为false且合同数量orderNum不为0",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_PwWIUu",
+                "topic_terms": [],
+                "transition_id": "txn_X26f8o",
+                "variable_conditions": []
+              }
+            ],
+            "type": "fork",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "",
+            "composition_mode": "fluid",
+            "description": "判断选中的合同情况，是否可办理，以及是否有预约",
+            "id": "sta_3jNGRI",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "判断选中的合同情况",
+            "tool_instruction": "",
+            "tool_state": [],
+            "transitions": [
+              {
+                "canned_responses": [],
+                "condition": "合同状态isEligible为false",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_Lj5AhD",
+                "topic_terms": [],
+                "transition_id": "txn_x5qWPA",
+                "variable_conditions": []
+              },
+              {
+                "canned_responses": [],
+                "condition": "合同状态isEligible为true且预约状态isBook为true",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_f9cvmv",
+                "topic_terms": [],
+                "transition_id": "txn_DdR8Yl",
+                "variable_conditions": []
+              },
+              {
+                "canned_responses": [],
+                "condition": "合同状态isEligible为true且预约状态isBook为false",
+                "exclude_keywords": [],
+                "intent": "",
+                "intent_labels": [],
+                "journey": null,
+                "keywords": [],
+                "metadata": {},
+                "patterns": [],
+                "response_mode": "inherit",
+                "resume_state_id": null,
+                "timeout_branch": false,
+                "to": "sta_2CzzvY",
+                "topic_terms": [],
+                "transition_id": "txn_b3ON0y",
+                "variable_conditions": []
+              }
+            ],
+            "type": "fork",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "亲亲，您当前的合同不满足提前结清条件，原因从变量reason中取值。",
+            "composition_mode": "fluid",
+            "description": "选择的合同不满足提前结清的办理条件",
+            "id": "sta_Lj5AhD",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "不满足办理条件",
+            "tool_instruction": "亲亲，您当前的合同不满足提前结清条件，原因从变量reason中取值",
+            "tool_state": [],
+            "transitions": [],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "给客户发送预约的办理链接地址，让客户进行办理。",
+            "composition_mode": "fluid",
+            "description": "选择的合同已经办理了预约",
+            "id": "sta_f9cvmv",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "已经办理预约",
+            "tool_instruction": "给客户发送预约的办理链接地址，让客户进行办理。",
+            "tool_state": [],
+            "transitions": [],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "表达感谢，结束对话",
+            "composition_mode": "fluid",
+            "description": "客户同意挽留",
+            "id": "sta_njUq9v",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "客户同意挽留",
+            "tool_instruction": "表达感谢，结束对话",
+            "tool_state": [],
+            "transitions": [],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          },
+          {
+            "canned_responses": [],
+            "chat_state": "客户不同意预约且仍坚持立即结清时，友好告知客户：由于您不同意预约办理，将为您转接人工客服处理，请稍候。随后结束自动服务。",
+            "composition_mode": "fluid",
+            "description": "客户不同意预约且坚持立即结清，转接人工客服",
+            "id": "sta_kQ3mZ9",
+            "labels": [],
+            "metadata": {},
+            "priority": 0,
+            "retrievers": [],
+            "title": "拒绝预约转人工",
+            "tool_instruction": "客户不同意预约且仍坚持立即结清时，友好告知客户：由于您不同意预约办理，将为您转接人工客服处理，请稍候。随后结束自动服务。",
+            "tool_state": [],
+            "transitions": [],
+            "type": "chat",
+            "variable_updates_on_enter": [],
+            "variable_updates_on_exit": [],
+            "variables": []
+          }
+        ],
+        "status": "alive",
+        "tags": [],
+        "title": "提前结清流程",
+        "triggers": [
+          "客户进线咨询后，识别【提前结清】意图，进入业务办理"
+        ]
+      }
+    ]
+  },
+  "observations": {
+    "observations": []
+  },
+  "post_call_fields": null,
+  "relationships": {
+    "relationships": []
+  },
+  "retrievers": {
+    "context_min_score_default": 0.3,
+    "initialized": false,
+    "retrievers": [
+      {
+        "collection": "",
+        "customer_metadata_filter_map": {},
+        "db_path": "",
+        "description": "Default global retriever available for every agent.",
+        "document_ids": [],
+        "endpoint": "",
+        "fetch_limit": 5,
+        "global": true,
+        "id": "rtr_5GmHil",
+        "knowledge_scope": "all_documents",
+        "metadata": {},
+        "metadata_filter": {},
+        "min_query_length": 2,
+        "min_score": null,
+        "status": "active",
+        "term_rewrite_enabled": false,
+        "timeout_seconds": 30,
+        "title": "Default Global Retriever",
+        "top_k": 5,
+        "type": "ragflow_http"
+      },
+      {
+        "collection": "",
+        "customer_metadata_filter_map": {},
+        "db_path": "",
+        "description": "Default global retriever available for every agent.",
+        "document_ids": [],
+        "endpoint": "",
+        "fetch_limit": 5,
+        "global": true,
+        "id": "default_global_retriever",
+        "knowledge_scope": "all_documents",
+        "metadata": {},
+        "metadata_filter": {},
+        "min_query_length": 2,
+        "min_score": null,
+        "status": "active",
+        "term_rewrite_enabled": false,
+        "timeout_seconds": 30,
+        "title": "Default Global Retriever",
+        "top_k": 5,
+        "type": "ragflow_http"
+      }
+    ]
+  },
+  "runtime_config": null,
+  "runtime_policies": null,
+  "session_analysis_labels": null,
+  "skills": null,
+  "tags": {
+    "tags": []
+  },
+  "tools": {
+    "tools": [
+      {
+        "config": null,
+        "consequential": true,
+        "description": "Update the current journey-node visit counter.",
+        "editable": false,
+        "id": "journey_node_counter",
+        "input_fields": [
+          {
+            "desc": "Optional limit used to calculate remaining and reached_limit.",
+            "name": "max_value",
+            "required": false,
+            "type": "integer | null"
+          }
+        ],
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "max_value": {
+              "description": "Optional limit used to calculate remaining and reached_limit.",
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "metadata": {},
+        "name": "journey_node_counter",
+        "output_fields": [],
+        "remote_name": null,
+        "retry": 0,
+        "server_id": null,
+        "source": "builtin",
+        "timeout_seconds": 30,
+        "type": "builtin"
+      },
+      {
+        "config": null,
+        "consequential": true,
+        "description": "Extract declared session variables and apply their updates.",
+        "editable": false,
+        "id": "variable_update",
+        "input_fields": [
+          {
+            "desc": "Optional declared variable names to extract. Omit to extract all.",
+            "name": "variable_names",
+            "required": false,
+            "type": "array"
+          },
+          {
+            "desc": "Optional structured selectors keyed by variable name.",
+            "name": "variable_selectors",
+            "required": false,
+            "type": "object"
+          }
+        ],
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "variable_names": {
+              "description": "Optional declared variable names to extract. Omit to extract all.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "variable_selectors": {
+              "description": "Optional structured selectors keyed by variable name.",
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "metadata": {},
+        "name": "variable_update",
+        "output_fields": [],
+        "remote_name": null,
+        "retry": 0,
+        "server_id": null,
+        "source": "builtin",
+        "timeout_seconds": 130,
+        "type": "builtin"
+      },
+      {
+        "config": null,
+        "consequential": false,
+        "description": "Search the web using Tavily and return concise result snippets.",
+        "editable": false,
+        "id": "tavily_search",
+        "input_fields": [
+          {
+            "desc": "Search query to send to Tavily.",
+            "name": "query",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "query": {
+              "description": "Search query to send to Tavily.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        },
+        "metadata": {},
+        "name": "tavily_search",
+        "output_fields": [],
+        "remote_name": null,
+        "retry": 0,
+        "server_id": null,
+        "source": "builtin",
+        "timeout_seconds": 30,
+        "type": "builtin"
+      }
+    ]
+  },
+  "variables": {
+    "variables": [
+      {
+        "allowed_values": [],
+        "bound_to": "",
+        "default_value": false,
+        "description": "合同是否预约判定",
+        "freshness_rules": null,
+        "id": "var_EZjk1M",
+        "metadata": {
+          "profile_field_aliases": []
+        },
+        "name": "isbook",
+        "tags": [],
+        "tool": "",
+        "type": "boolean"
+      },
+      {
+        "allowed_values": [],
+        "bound_to": "",
+        "default_value": true,
+        "description": "合同是否满足办理条件",
+        "freshness_rules": null,
+        "id": "var_eyw1a0",
+        "metadata": {
+          "profile_field_aliases": []
+        },
+        "name": "isEligible",
+        "tags": [],
+        "tool": "",
+        "type": "boolean"
+      },
+      {
+        "allowed_values": [],
+        "bound_to": "",
+        "default_value": false,
+        "description": "敏感身份判定",
+        "freshness_rules": null,
+        "id": "var_xHAwkM",
+        "metadata": {
+          "profile_field_aliases": []
+        },
+        "name": "isSensitive",
+        "tags": [],
+        "tool": "",
+        "type": "boolean"
+      },
+      {
+        "allowed_values": [],
+        "bound_to": "",
+        "default_value": "您名下有3个合同。\n合同1:尾号0001，贷款金额为500元；\n合同2:尾号0002，贷款金额为1000元；\n合同3:尾号0003，贷款金额为2000元。",
+        "description": "查询用户名下的合同信息。",
+        "freshness_rules": null,
+        "id": "var_N9BnE4",
+        "metadata": {
+          "profile_field_aliases": []
+        },
+        "name": "orderList",
+        "tags": [],
+        "tool": "",
+        "type": "string"
+      },
+      {
+        "allowed_values": [],
+        "bound_to": "",
+        "default_value": "1",
+        "description": "合同数量判定",
+        "freshness_rules": null,
+        "id": "var_47nAWN",
+        "metadata": {
+          "profile_field_aliases": []
+        },
+        "name": "orderNum",
+        "tags": [],
+        "tool": "",
+        "type": "string"
+      },
+      {
+        "allowed_values": [],
+        "bound_to": "",
+        "default_value": "当前合同存在逾期为还款，请进行还款后才能办理",
+        "description": "当变量`isEligible`为`false`时，此变量才生效，代表合同不满足办理条件的原因。",
+        "freshness_rules": null,
+        "id": "var_mtKiV4",
+        "metadata": {
+          "profile_field_aliases": []
+        },
+        "name": "reason",
+        "tags": [],
+        "tool": "",
+        "type": "string"
+      },
+      {
+        "id": "var_vd7kxe",
+        "name": "orderType",
+        "type": "string",
+        "description": "",
+        "default_value": "分期订单"
+      }
+    ]
+  }
+}

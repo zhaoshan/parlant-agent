@@ -72,6 +72,11 @@ flowchart LR
 | [13-发布与渠道部署设计.md](03-production/13-发布与渠道部署设计.md) | 发布流程与渠道接入设计 |
 | [14-评估机制与evaluation-cache.md](03-production/14-评估机制与evaluation-cache.md) | 自研：旅程/指南评估原理、内容寻址缓存、热加载补评估、残缺评估故障模式与运维 SOP |
 
+### 待跟进问题（to-follow-up）
+| 文档 | 状态 |
+|---|---|
+| [挽留计数与工具职责.md](to-follow-up/挽留计数与工具职责.md) | 已解决：journey_node_counter 差 1 排查实录 + tool→fork 走通（loader 补 REEVALUATION 关系）+ 变量泄漏幻觉 + 插桩 parlant-agent |
+
 ### 04-execution-chain 源码执行链路（基于 v3.3.1 源码）
 | 文档 | 内容 |
 |---|---|

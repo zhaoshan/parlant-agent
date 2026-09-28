@@ -16,7 +16,7 @@ from typing import Any, cast
 
 import structlog
 import parlant.sdk as p
-from parlant.sdk import _Tag
+from parlant.sdk import _Tag, _tool_ref_to_id
 from parlant.core.agents import AgentStore
 from parlant.core.canned_responses import CannedResponseStore
 from parlant.core.common import ItemNotFoundError
@@ -24,7 +24,12 @@ from parlant.core.context_variables import ContextVariableStore
 from parlant.core.glossary import GlossaryStore
 from parlant.core.guidelines import GuidelineStore
 from parlant.core.journeys import JourneyStore
-from parlant.core.relationships import RelationshipStore
+from parlant.core.relationships import (
+    RelationshipEntity,
+    RelationshipEntityKind,
+    RelationshipKind,
+    RelationshipStore,
+)
 
 from app.models.definition import AgentDefinition, GuidelineDef, JourneyDef
 from app.services.builtin_tools import resolve_tool, set_runtime_services
@@ -344,6 +349,26 @@ class AgentLoader:
             # journey.states/transitions → 不补齐则哈希只含根节点（常量），结构怎么改
             # 都命中首次评估、永不重评估（曾导致草稿加状态后仍用旧分叉表）。此处手动补齐。
             cast(list, journey.states).append(state)
+            # [tool→fork 修复·2026-09-28] SDK 只在 _transition()（fluent API）里为 tool 节点建
+            # "journey_node_tag → tool" 的 REEVALUATION 关系；我们直接调 _create_state +
+            # create_transition 绕过了它 → find_guidelines_that_need_reevaluation 反查不到
+            # → 迭代2重评估返回 0 → 旅程批处理不跑 → tool 节点滞留、fork 不路由。
+            # 此处按 SDK 同款（sdk.py _transition）补建，让 tool 节点的出边（含 fork）能在
+            # 同轮被 next-step 选择推进。
+            if tools:
+                relationship_store = self._server.container[RelationshipStore]
+                for t in tools:
+                    await relationship_store.create_relationship(
+                        source=RelationshipEntity(
+                            id=_Tag.for_journey_node_id(state.id).id,
+                            kind=RelationshipEntityKind.TAG_ALL,
+                        ),
+                        target=RelationshipEntity(
+                            id=_tool_ref_to_id(t),
+                            kind=RelationshipEntityKind.TOOL,
+                        ),
+                        kind=RelationshipKind.REEVALUATION,
+                    )
 
         created_transitions: list = []
         if journey_def.entry_node and journey_def.entry_node in state_map:

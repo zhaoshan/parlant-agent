@@ -39,6 +39,10 @@ keys_to_check_in_order_of_importance = (
 
 解析后的变量以 `{变量名: {value, description}}` JSON 注入 LLM 提示（`context_variables_to_json`）。
 
+> **陷阱（变量泄漏幻觉，2026-09-28 实测）**：所有解析到的变量**无差别全量注入** LLM 上下文，**没有节点级/条件级过滤**——即使变量描述写明"仅当 XX 条件成立时生效"，LLM 也不当硬规则，会在任意节点把它当事实引用。
+> 例：`reason` 变量默认值="该合同存在逾期未还款，需先完成还款后才能办理提前结清"（本意只给 isEligible=false 分支用），结果在 isEligible=true 的预约节点被 LLM 误当"提醒"吐出（会话 `1KSa7larLM`）。
+> **教训：只应在特定条件成立时使用的变量，默认值应留空**（由工具/变量更新写入），描述只说明用途、别承载具体业务状态断言。详见 `docs/to-follow-up/挽留计数与工具职责.md` §3.4。
+
 **值在哪存**（SDK 辅助方法，sdk.py）：
 - `set_value_for_agent(agent, value)` → key = `agent:<agent_id>`（**Agent 构建默认**；我们的
   `agent_loader.py:197` 加载定义时即 `variable.set_value_for_agent(agent, default_value)`）
