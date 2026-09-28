@@ -330,6 +330,7 @@ function stateOfTitle(id: string | undefined, states: JourneyStateDef[]): string
 function GraphView(props: { journey: JourneyDef; selectedId: string | null; onPick: (id: string) => void }) {
   const { journey, selectedId, onPick } = props
   const containerRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const nodeRefs = useRef(new Map<string, HTMLDivElement>())
   const [lines, setLines] = useState<{ x1: number; y1: number; x2: number; y2: number }[]>([])
 
@@ -365,9 +366,10 @@ function GraphView(props: { journey: JourneyDef; selectedId: string | null; onPi
 
   useEffect(() => {
     const compute = () => {
-      const c = containerRef.current
-      if (!c) return
-      const crect = c.getBoundingClientRect()
+      // 坐标相对内容容器（含滚动内容），svg 同容器 inset-0 铺满 → 超出可视区的线也可见
+      const cc = contentRef.current
+      if (!cc) return
+      const crect = cc.getBoundingClientRect()
       const out: typeof lines = []
       for (const s of journey.states ?? []) {
         const from = nodeRefs.current.get(s.id)
@@ -410,21 +412,16 @@ function GraphView(props: { journey: JourneyDef; selectedId: string | null; onPi
         </div>
       )}
       <div ref={containerRef} className="relative flex-1 overflow-auto bg-[var(--bg)] p-6" style={{ backgroundImage: 'radial-gradient(circle, #E4E7EC 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
-        <svg className="pointer-events-none absolute inset-0 h-full w-full">
-          {lines.map((l, i) => (
-            <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#CBD2DC" strokeWidth="1.5" strokeDasharray="4 3" />
-          ))}
-        </svg>
-        <div className="relative mx-auto flex max-w-[1000px] gap-10">
+        <div ref={contentRef} className="relative mx-auto flex min-w-fit gap-10">
           {layers.map((layer) => (
-            <div key={layer} className="flex min-w-[170px] flex-1 flex-col gap-4">
+            <div key={layer} className="flex w-[190px] flex-none flex-col gap-4">
               {journey.states?.filter((s) => layout.get(s.id)?.layer === layer).map((s) => {
                 const color = NODE_COLOR[s.type] ?? NODE_COLOR.chat
                 return (
                   <div
                     key={s.id}
                     ref={(el) => { if (el) nodeRefs.current.set(s.id, el) }}
-                    className={`cursor-pointer rounded-lg border p-3 ${selectedId === s.id ? 'border-[var(--primary)] shadow-[0_0_0_3px_var(--primary-weak)]' : 'border-[var(--line)]'}`}
+                    className={`w-full cursor-pointer rounded-lg border p-3 ${selectedId === s.id ? 'border-[var(--primary)] shadow-[0_0_0_3px_var(--primary-weak)]' : 'border-[var(--line)]'}`}
                     style={{ background: color.bg }}
                     onClick={() => onPick(s.id)}
                   >
@@ -440,6 +437,17 @@ function GraphView(props: { journey: JourneyDef; selectedId: string | null; onPi
               })}
             </div>
           ))}
+          {/* 连线：铺满内容容器（滚动区内的线也可见）、置于节点上层不被遮挡、带方向箭头 */}
+          <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full">
+            <defs>
+              <marker id="pa-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#8B96A5" />
+              </marker>
+            </defs>
+            {lines.map((l, i) => (
+              <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#8B96A5" strokeWidth="1.5" strokeDasharray="4 3" markerEnd="url(#pa-arrow)" />
+            ))}
+          </svg>
         </div>
       </div>
     </div>
