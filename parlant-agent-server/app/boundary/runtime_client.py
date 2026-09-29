@@ -6,7 +6,7 @@
 - 会话代理 + SSE 透传（3.3）：`create_session` / `get_session` / `list_sessions` /
   `create_customer` / `list_customers` / `post_event`（转发 Parlant REST），
   `stream_events`（以 httpx 流式订阅 runtime `GET /sessions/{id}/events?sse=true`，
-  供 `routers/api_sessions.py` 用 StreamingResponse 逐帧转发给 web）。
+  供 `routers/sessions.py` 用 StreamingResponse 逐帧转发给 web）。
 
 目标契约（plan 阶段2 任务 2.5 定的 runtime `/internal/*` + Parlant REST）：
     POST /internal/agents/{id}/load     # 接收完整定义 JSON，热加载（幂等）

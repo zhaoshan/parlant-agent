@@ -1,6 +1,6 @@
-"""阶段3.2：runtime /internal/* API（只面向 parlant-agent-server，不面向前端）。
+"""runtime 引擎控制面（原 internal_api）：`/internal/*` API，只面向 parlant-agent-server，不面向前端。
 
-定义层已归 parlant-agent-server 独占写；本节只保留**执行类**端点：
+server（BFF）驱动 runtime 引擎的入口，端点：
     POST   /internal/agents/{id}/load    接收完整定义 JSON，幂等热加载进引擎
     POST   /internal/agents/{id}/unload  卸载引擎实体（含子实体，级联清理）
     GET    /internal/agents              已加载 agent 列表 + 加载状态

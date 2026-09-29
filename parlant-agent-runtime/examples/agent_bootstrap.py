@@ -1,8 +1,12 @@
 """阶段1.3：手动装载示例"提前结清"Agent（definition -> Parlant 实体逐字段映射）。
 
+> **历史示例，已移出 app/services**：阶段2 起本模块的映射逻辑被 AgentLoader
+> （app/services/agent_loader.py）取代（消费类型化 AgentDefinition 而非裸 dict、
+> 幂等重载、多实例后缀隔离）。本文件保留作「单 agent 手工装配」教学参考，
+> 不参与生产路径；需要读取定义文件时用 `app.services.agent_loader.load_definition`。
+
 把 agent-definition.json 的每个字段亲手映射到 Parlant 实体，是理解 schema 与
-引擎关系的最佳实践（见 plan/阶段1-runtime最小可用-单Agent对话与追踪.md 任务 1.3）。阶段2 起本模块的
-映射逻辑被 AgentLoader 取代（本文件退化为「单 agent 的手工装配示例」）。
+引擎关系的最佳实践（见 plan/阶段1-runtime最小可用-单Agent对话与追踪.md 任务 1.3）。
 
 字段映射（与 Parlant v3.3.1 SDK 对齐）：
   agent              -> Agent（name/description/composition_mode；boundary/utterances
@@ -28,15 +32,12 @@ API；前者虽带下划线但是唯一支持「先建状态再连线」的入�
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
 
 import parlant.sdk as p
 
+from app.services.agent_loader import load_definition
 from app.services.builtin_tools import resolve_tool
-
-DEFINITION_PATH = Path(__file__).resolve().parents[3] / "agent-definition.json"
 
 _COMPOSITION_MODES = {
     "fluid": p.CompositionMode.FLUID,
@@ -50,11 +51,6 @@ _STATE_TYPES = {
     "tool": p.ToolJourneyState,
     "fork": p.ForkJourneyState,
 }
-
-
-def load_definition(path: Path = DEFINITION_PATH) -> dict[str, Any]:
-    """读取 agent-definition.json（单一事实源）。"""
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def _composition_mode(value: str | None) -> p.CompositionMode:

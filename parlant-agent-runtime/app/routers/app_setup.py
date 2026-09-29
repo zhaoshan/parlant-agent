@@ -1,14 +1,14 @@
-"""configure_api 扩展：在 Parlant 的 FastAPI app 上挂自定义端点。
+"""runtime FastAPI app 装配：p.Server(configure_api=...) 的扩展入口。
 
-阶段1：/health 探活。
-阶段2：/internal/* 端点（Agent CRUD / publish / rollback）——只面向
-       parlant-agent-server（BFF），阶段3 起由 server 代理前端调用。
+在 Parlant 的 FastAPI app 上挂自定义端点：
+- `/health` 探活；
+- `/internal/*` 引擎控制面（见 ``engine_control``，只面向 parlant-agent-server）。
 """
 
 from fastapi import FastAPI
 
 from app.config import get_settings
-from app.routers.internal_api import configure_internal_api
+from app.routers.engine_control import configure_internal_api
 from app.utils.observability import instrument_fastapi
 
 

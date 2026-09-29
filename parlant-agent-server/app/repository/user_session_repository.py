@@ -20,10 +20,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, JSON, String, delete, func, or_, and_, select, text, update
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import and_, delete, func, or_, select, text, update
 
 from app.databases import MySqlConnection
+from app.models.chat_session import Base, UserSession
 
 # 会话来源渠道
 SOURCE_ONLINE = "online"  # 线上客户正式问答渠道（可多部署渠道）
@@ -37,33 +37,6 @@ END_TIMEOUT = "timeout"  # 超过超时时间自动失效
 # Agent 状态
 AGENT_STATUS_PUBLISHED = "published"
 AGENT_STATUS_DRAFT = "draft"
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-class UserSession(Base):
-    __tablename__ = "user_sessions"
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    user_id: Mapped[str] = mapped_column(String(64), index=True)
-    session_id: Mapped[str] = mapped_column(String(64), unique=True)
-    agent_id: Mapped[str] = mapped_column(String(64), index=True)
-    agent_instance_id: Mapped[str | None] = mapped_column(String(96), nullable=True)
-    agent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    agent_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    title: Mapped[str | None] = mapped_column(String(255))
-    status: Mapped[str] = mapped_column(String(32), default="active")
-    source: Mapped[str] = mapped_column(String(32), default=SOURCE_ONLINE)
-    ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    ended_reason: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime)
-    updated_at: Mapped[datetime] = mapped_column(DateTime)
-    last_message_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # 会话发起时的变量生效初始快照 {变量名: {"value": 生效值, "source": "override"|"default"}}
-    # （弹窗改了 → override 记修改后值；未改 → default 记 Agent 构建默认值）
-    initial_variables: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
 
 def _utcnow() -> datetime:

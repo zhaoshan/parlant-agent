@@ -12,6 +12,8 @@ agent_bootstrap.py 一致（glossary/canned/variables/journeys/guidelines/tools�
 from __future__ import annotations
 
 import asyncio
+import json
+from pathlib import Path
 from typing import Any, cast
 
 import structlog
@@ -74,6 +76,22 @@ def _split_synonyms(raw: Any) -> list[str]:
     for item in raw:
         out.extend(s.strip() for s in str(item).split(",") if s.strip())
     return out
+
+
+# 本地示例定义文件（单一事实源，仅在 server 不可达的降级路径使用）。
+# 位于仓库根（agent-definition.json），相对本模块（app/services/）向上 3 级。
+DEFINITION_PATH = Path(__file__).resolve().parents[3] / "agent-definition.json"
+
+
+def load_definition(path: Path = DEFINITION_PATH) -> dict[str, Any]:
+    """读取 agent-definition.json（本地示例定义，降级路径用）。
+
+    main.py 启动时 server 不可达（或暂无 published）时读取；正式路径的定义
+    来自 server 定义层（Mongo，parse_definition 解析成 AgentDefinition 后走
+    AgentLoader.load）。原在 app/services/agent_bootstrap.py（阶段1 示例）内，
+    bootstrap 移出 app/services 后并入本模块。
+    """
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 class AgentLoader:

@@ -1,5 +1,5 @@
-"""路由包：configure_api 扩展挂载的端点（/health + /internal/*）。"""
+"""路由包：runtime FastAPI app 装配入口（/health + /internal/* 引擎控制面）。"""
 
-from app.routers.api_extensions import configure_api
+from app.routers.app_setup import configure_api
 
 __all__ = ["configure_api"]

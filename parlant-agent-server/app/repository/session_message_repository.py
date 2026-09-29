@@ -27,39 +27,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, Index, Integer, String, Text, select
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy import select
 
 from app.databases import MySqlConnection
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-class SessionMessage(Base):
-    __tablename__ = "session_messages"
-    __table_args__ = (
-        Index("uq_session_message", "session_id", "message_id", unique=True),
-        Index("ix_msg_request", "request_id"),
-    )
-
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(String(64))
-    request_id: Mapped[str] = mapped_column(String(64))
-    message_id: Mapped[str] = mapped_column(String(64))
-    role: Mapped[str] = mapped_column(String(16))
-    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    user_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    agent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    agent_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    content: Mapped[str] = mapped_column(Text)
-    content_type: Mapped[str] = mapped_column(String(16), default="text")
-    trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="completed")
-    event_offset: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime)
-    updated_at: Mapped[datetime] = mapped_column(DateTime)
+from app.models.chat_session import Base, SessionMessage
 
 
 def _utcnow() -> datetime:

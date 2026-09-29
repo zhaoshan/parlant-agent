@@ -21,7 +21,7 @@ import parlant.sdk as p
 
 from app.boundary.policies import build_container
 from app.config import get_settings
-from app.routers.api_extensions import configure_api
+from app.routers.app_setup import configure_api
 from app.utils.observability import configure_langfuse_otel
 
 DEMO_HOST = "127.0.0.1"
