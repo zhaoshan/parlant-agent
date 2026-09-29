@@ -65,10 +65,10 @@ parlant-agent/
 
 ## 五、关键约定与陷阱（务必先读）
 
-1. **Parlant 源码本地安装**：`parlant` 经 `[tool.uv.sources]` 指向 `../parlant` editable 安装（工作区外独立 repo）。**我们对 parlant 源码做过 6 处改动**（git 可查 diff），其中：
-   - **必需 hack（勿还原）**：`litellm_service.py`（惰性导入 JinaAIEmbedder，Intel 机器无 torch wheel）、`opentelemetry.py`（OTLP timeout 30000 + console/HTTP 噪声采样）。
-   - **上游 bug 修复**：`sdk.py` 评估任务名解析（`split("_")[-1]` → `removeprefix`，否则含下划线 id 启动崩溃）。
-   - **观测插桩（技术债，待去 hack 化）**：`engine.py` / `journey_next_step_selection.py` / `journey_node_selection_batch.py` / `gen_ai.py` 的日志与 span；统一 `[parlant-agent]` 前缀（原 `parlant-study` 已清除）、全带 `session=`，详见 `docs/to-follow-up/挽留计数与工具职责.md` §四；方案见 `docs/03-production/12-观测插桩去hack化改造.md`，落地后 git checkout 还原这 4 处。
+1. **Parlant 源码本地安装**：`parlant` 经 `[tool.uv.sources]` 指向 `../parlant` editable 安装（工作区外独立 repo）。**我们对 parlant 源码改动过 3 次提交、共 8 个文件**（相对原生 `ea737442`，git 可查 diff），通盘核对见 `docs/03-production/12` §1。**2026-09-28 已落地去 hack 化**：
+   - **保留的必需 hack（勿还原）**：`litellm_service.py`（惰性导入 `JinaAIEmbedder`，Intel 机器无 torch wheel）、`opentelemetry.py`（console exporter 加开关默认关，`PARLANT_OTEL_CONSOLE_EXPORTER=1` 才开；**timeout 是 runtime 配置非源码 hack**）。
+   - **上游 bug 修复（应贡献上游）**：`sdk.py` 评估任务名解析（`split("_")[-1]` → `removeprefix`，否则含下划线 id 启动崩溃）。
+   - **观测插桩已全部还原**（git checkout 5 文件：generation/engine/next_step/batch/entity_cq），功能迁入 **runtime `app/observability/`** 分 package：`otel/`（litellm OTel 回调 → gen_ai.* generation）、`hooks/`（EngineHooks journey.progress index:名称 + process 根 span I/O）、`patches/`（DeepSeek 关 reasoning 注入）、`labels/`（journey index→名称 BFS 复刻）。原 `[parlant-agent]` 前缀日志改由 hooks 输出。详见 `docs/03-production/12`。
 2. **定义层 ↔ 引擎实体 id**：加载器显式传旅程/状态 id（`jny_*`/`sta_*`，进全局存储）；**带 `@` 后缀的实例**（草稿 `{agent_id}@draft`）子实体 id 统一加后缀隔离，否则旅程 id 冲突报错、状态 id 静默覆盖。
 3. **热加载旅程必须后台补评估**：`reachable_follow_ups`（分叉条件表）只由 SDK 启动评估产出；热加载（publish/rollback/@draft）实体由 `AgentLoader` `asyncio.create_task` 后台逐旅程评估（缓存 `parlant-data/evaluation_cache.json`，实测可达 8 分钟，阻塞会拖死 load/会话创建）。评估完成前 fork 暂不可推进。**评估内容是评估时的模型生成的，可能静默残缺**（缺分支不报错、旅程跑偏但无 invalid condition id）——换模型/旅程结构变更后需质检分叉完整性，运维 SOP 见 `docs/03-production/14-评估机制与evaluation-cache.md`。
 4. **服务间 502 陷阱**：本机 macOS 系统代理（`:7899`）+ httpx `trust_env` 默认读 → 127.0.0.1 请求被转代理。**runtime↔server 全部 httpx 客户端 `trust_env=False` 直连**；server 的 `load_agent` 超时单独 600s。
@@ -85,6 +85,6 @@ Guideline=指南 · Journey=旅程 · JourneyState=状态 · Canned Response=预
 
 - **阶段0~2 完成**（环境 / runtime 最小可用 / 定义转换+多 Agent）。
 - **阶段3 进行中**：3.1-3.4 + 消息历史 + 会话生命周期/渠道 + 草稿试跑 + 旅程配置审计 + 内置工具 + 版本规则 已实现并验证；web 聊天/构建页已能跑通定义加载与模拟对话。
-- **待办**：web 配置管理完整化（阶段4）、自动仿真（阶段6）、runtime 生产化（阶段5：多 pod/HA/消息队列/版本实例隔离）、观测插桩去 hack 化（技术债）、**挽留计数/工具职责已解决**（tool→fork 走通 = loader 补 REEVALUATION 关系；reason 变量默认值清空待保存；fork 结构 vs 双节点方案待业务决策，见 `docs/to-follow-up/挽留计数与工具职责.md`）。
+- **待办**：web 配置管理完整化（阶段4）、自动仿真（阶段6）、runtime 生产化（阶段5：多 pod/HA/消息队列/版本实例隔离）、**观测插桩去 hack 化已落地**（2026-09-28：parlant 5 插桩文件已还原，功能迁 runtime `app/observability/`，待重启 runtime 验证，见 doc12 §3）、**挽留计数/工具职责已解决**（tool→fork 走通 = loader 补 REEVALUATION 关系；reason 变量默认值清空待保存；fork 结构 vs 双节点方案待业务决策，见 `docs/to-follow-up/挽留计数与工具职责.md`）。
 
 > 详细进度与排障结论见 `memory/`（Claude 自动记忆，不入库）与本文件第五节的约定。

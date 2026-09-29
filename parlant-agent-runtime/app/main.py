@@ -28,9 +28,10 @@ import parlant.sdk as p
 from app.boundary.policies import build_container
 from app.config import get_settings
 from app.models import parse_definition
-from app.routers.api_extensions import configure_api
+from app.observability import configure_engine_hooks, install_observability
+from app.routers.app_setup import configure_api
 from app.services import get_runtime, init_runtime
-from app.services.agent_bootstrap import load_definition
+from app.services.agent_loader import load_definition
 from app.utils.observability import configure_langfuse_otel
 
 
@@ -85,6 +86,9 @@ async def main() -> None:
         nlp_service=p.NLPServices.litellm,  # 官方 OpenAI 可换成 p.NLPServices.openai
         configure_api=configure_api,
         configure_container=build_container,
+        # 观测 hooks：journey.progress / process 根 span I/O（替代 parlant 源码插桩，
+        # 见 app/observability/hooks）。configure_hooks 在 __aenter__ 装配期被调用。
+        configure_hooks=configure_engine_hooks,
         # 阶段3.3 修复：会话/客户默认 transient（重启即失，历史会话继续问答报
         # "Session not found"）。改 "local" 持久化到 parlant-data/sessions.json、
         # customers.json（事件随会话一起落盘）；agent 实体仍启动时从 Mongo 重建。
@@ -95,6 +99,8 @@ async def main() -> None:
         # 阶段3.2：装配 runtime（registry），从 server 拉取 published 定义加载。
         # 退出 async with 块时，__aexit__ 会自动启动 HTTP 服务并阻塞直至被信号中断。
         await init_runtime(server)
+        # 观测/模型适配集中装配（litellm OTel 回调 + DeepSeek reasoning patch，幂等）
+        install_observability()
         loaded = await _load_published_agents()
         print(f"✅ parlant-agent-runtime 已装配，加载 {len(loaded)} 个 Agent：{loaded}")
 
