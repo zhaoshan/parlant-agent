@@ -67,7 +67,7 @@ flowchart LR
 | [08-内置ChatUI与HTTP接口分析.md](03-production/08-内置ChatUI与HTTP接口分析.md) | 自研：/chat 交互逻辑 + 框架 REST 接口清单 + BFF 代理映射 |
 | [09-客户信息与Variables覆盖机制.md](03-production/09-客户信息与Variables覆盖机制.md) | 自研：客户信息用法 + 变量解析优先级 + 客户级覆盖 Agent 默认（自动仿真依据） |
 | [10-草稿试跑与会话版本隔离.md](03-production/10-草稿试跑与会话版本隔离.md) | 自研：草稿 @draft 独立实例试跑、session 记录 Agent 版本/状态、不影响线上 |
-| [11-内置工具实现与配置.md](03-production/11-内置工具实现与配置.md) | 自研：journey_node_counter / variable_update / tavily_search 的实现与配置、生效机制 |
+| [11-工具实现与配置指南.md](03-production/11-工具实现与配置指南.md) | 自研：内置工具（journey_node_counter / variable_update / tavily_search）+ remote 自定义 HTTP 工具、变量 freshness 联动、前端配置、踩坑清单 |
 | [12-观测插桩去hack化改造.md](03-production/12-观测插桩去hack化改造.md) | 技术债：用 litellm OTel + EngineHooks 替代 parlant 源码插桩（LLM I/O + 旅程日志） |
 | [13-发布与渠道部署设计.md](03-production/13-发布与渠道部署设计.md) | 发布流程与渠道接入设计 |
 | [14-评估机制与evaluation-cache.md](03-production/14-评估机制与evaluation-cache.md) | 自研：旅程/指南评估原理、内容寻址缓存、热加载补评估、残缺评估故障模式与运维 SOP |
@@ -83,6 +83,13 @@ flowchart LR
 | [01-业务执行链路总览.md](04-execution-chain/01-业务执行链路总览.md) | 一次提问的完整流程 + 时序图/协作图 |
 | [02-核心模块源码地图.md](04-execution-chain/02-核心模块源码地图.md) | 组件 → 源码文件 → 类/函数 对照 |
 | [03-可观测性与追踪对接.md](04-execution-chain/03-可观测性与追踪对接.md) | trace_id/span 如何对接 langfuse |
+
+### 05-sample-agents 示例 Agent（平台能力落地示范）
+| 文档 | 内容 |
+|---|---|
+| [智能投顾Agent需求.md](05-sample-agents/智能投顾Agent需求.md) | 需求文档：三方服务 6 API + Journey + 合规门控 + 四演示场景 |
+| [智能投顾Agent-实现说明.md](05-sample-agents/智能投顾Agent-实现说明.md) | 实现落地 + E2E 实测 + 两个引擎级设计约束（旅程 priority / strict footgun） |
+| [remote-http-tools.md](05-sample-agents/remote-http-tools.md) | 平台能力：remote 远程服务工具（通用 HTTP 工具内核）实现说明 |
 
 ---
 

@@ -58,6 +58,7 @@ parlant-agent/
 ├── parlant-agent-runtime/    # 执行引擎（见其 README）
 ├── parlant-agent-server/     # BFF（见其 README）
 ├── parlant-agent-web/        # 前端（见其 README）
+├── invest-advisor-demo/      # 三方服务示例应用（智能投顾：文件存储客户/产品/订单；:8300）
 ├── design/                   # 设计稿（design/agentstudio/ v3.2 当前有效；admin/v1、chat/v2 历史稿）
 ├── .gitignore
 └── .env                      # 根环境变量：LANGFUSE_*（不入库）

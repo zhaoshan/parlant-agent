@@ -34,7 +34,7 @@ from parlant.core.relationships import (
 )
 
 from app.models.definition import AgentDefinition, GuidelineDef, JourneyDef
-from app.services.builtin_tools import resolve_tool, set_runtime_services
+from app.services.builtin_tools import BUILTIN_TOOLS, resolve_tool, set_runtime_services
 
 logger = structlog.get_logger()
 
@@ -106,6 +106,12 @@ class AgentLoader:
         # 内置工具（variable_update 写变量）需要容器访问
         set_runtime_services(self._server.container)
 
+        # remote 远程服务工具：按 schema 声明生成通用 HTTP 工具实例（幂等复用），
+        # 供后续 tool 节点/指南绑定（resolve_tool 兜底解析，见 builtin_tools.py）。
+        from app.services.http_tools import register_remote_tools
+
+        register_remote_tools(definition.tools.tools)
+
         # 幂等：已存在则先卸载（含子实体）再重建
         if await self._server.find_agent(id=agent_def.id):
             await self._delete_agent_entities(agent_def.id)
@@ -121,7 +127,9 @@ class AgentLoader:
             canrep_map = await self._build_canned(agent, definition)
             await self._build_variables(agent, definition)
             journey_map = await self._build_journeys(agent, definition)
-            await self._build_guidelines(agent, definition, canrep_map, journey_map)
+            guideline_ids = await self._build_guidelines(agent, definition, canrep_map, journey_map)
+            await self._build_observations(agent, definition, canrep_map, journey_map)
+            await self._build_relationships(agent, definition, guideline_ids, set(journey_map))
             self._evaluate_journeys_now(list(journey_map.values()))
         except Exception:
             # 失败回滚：删干净，避免"建了一半"的 agent
@@ -238,6 +246,15 @@ class AgentLoader:
                 except Exception:  # noqa: BLE001 - 尽力删除
                     pass
 
+        # 清理本 agent 的定义层 relationships（加载时带 group_id=agent.id 标记；journey
+        # 引擎内部 REEVALUATION 等关系无 group_id，不受影响）
+        try:
+            for rel in await relationship_store.list_relationships():
+                if rel.group_id == agent_id:
+                    await relationship_store.delete_relationship(rel.id)
+        except Exception:  # noqa: BLE001 - 尽力清理
+            pass
+
         # 再按 agent 标签清其余实体（含 agent 级指南）；各自 list_* 都支持 tags 过滤
         stores = [
             (GuidelineStore, "list_guidelines", "delete_guideline"),
@@ -292,9 +309,16 @@ class AgentLoader:
 
     async def _build_variables(self, agent: p.Agent, definition: AgentDefinition) -> None:
         for var in definition.variables.variables:
+            tool_ref = None
+            if var.tool:
+                # 变量关联工具：freshness_rules 过期时引擎以**空参数**自动调工具刷新
+                # （engine.py 变量加载路径 arguments={}）→ remote 工具内核会自动注入
+                # customer_id，URL 用 {customer_id} 占位即可，见 http_tools.py。
+                tool_ref = resolve_tool(var.tool)
             variable = await agent.create_variable(
                 name=var.name,
                 description=var.description or None,
+                tool=tool_ref,
                 freshness_rules=var.freshness_rules or None,
             )
             await variable.set_value_for_agent(agent, var.default_value)
@@ -425,10 +449,32 @@ class AgentLoader:
         definition: AgentDefinition,
         canrep_map: dict[str, p.CannedResponseId],
         journey_map: dict[str, p.Journey],
+    ) -> set[str]:
+        """装配普通指南（Guideline），返回定义层 guideline id 集合（供 relationships 引用）。
+
+        Observations（观察性指南）由 `_build_observations` 单独装配——Parlant 里
+        观察性指南 = 无 Action 的指南（`create_observation` 是 `create_guideline` 的
+        shorthand），走独立的匹配批处理（observational_batch），与普通指南语义不同。
+        """
+        for g in definition.guidelines.guidelines:
+            await self._create_guideline(agent, g, canrep_map, journey_map, observation=False)
+        return {g.id for g in definition.guidelines.guidelines} | {
+            g.id for g in definition.observations.observations
+        }
+
+    async def _build_observations(
+        self,
+        agent: p.Agent,
+        definition: AgentDefinition,
+        canrep_map: dict[str, p.CannedResponseId],
+        journey_map: dict[str, p.Journey],
     ) -> None:
-        all_guidelines = [*definition.guidelines.guidelines, *definition.observations.observations]
-        for g in all_guidelines:
-            await self._create_guideline(agent, g, canrep_map, journey_map)
+        """装配观察性指南（Observation，无 Action）：命中即标记已发生，不要求回复动作。
+
+        复用 `_create_guideline`（observation=True 分支走 `create_observation`）。
+        """
+        for g in definition.observations.observations:
+            await self._create_guideline(agent, g, canrep_map, journey_map, observation=True)
 
     async def _create_guideline(
         self,
@@ -436,20 +482,129 @@ class AgentLoader:
         g: GuidelineDef,
         canrep_map: dict[str, p.CannedResponseId],
         journey_map: dict[str, p.Journey],
+        *,
+        observation: bool = False,
     ) -> None:
+        """创建一条指南（或观察性指南），保留定义层 id（带实例后缀）。
+
+        [2026-09-29] 保留 `gdl_*` id（原为 SDK 随机）——定义层 relationships 按
+        定义层 id 引用指南，随机 id 无法被引用；@draft/多版本实例加后缀隔离（同旅程）。
+        追踪对账也随之受益（指南 id 可对账定义层）。
+
+        观察性指南（observation=True）：无 Action；`Journey.create_observation` 不接收
+        `action/criticality`（Agent 版有 criticality），故参数分流。
+        """
+        suffix = _instance_suffix(agent.id)
         canreps = [canrep_map[c] for c in g.canned_responses if c in canrep_map]
         tools = [resolve_tool(t) for t in g.tools]
-        kwargs: dict[str, Any] = dict(
-            condition=g.condition or None,
-            action=g.action or None,
-            criticality=p.Criticality(g.criticality),
-            priority=g.priority,
-            canned_responses=canreps,
-            tools=tools,
-            track=g.track,
-            composition_mode=_composition_mode(g.composition_mode),
-        )
-        if g.journey_ids and g.journey_ids[0] in journey_map:
-            await journey_map[g.journey_ids[0]].create_guideline(**kwargs)
+        target = journey_map.get(g.journey_ids[0]) if g.journey_ids else None
+        gid = p.GuidelineId(f"{g.id}{suffix}") if g.id else None
+        if observation:
+            kwargs: dict[str, Any] = dict(
+                condition=g.condition or None,
+                tools=tools,
+                canned_responses=canreps,
+                composition_mode=_composition_mode(g.composition_mode),
+                id=gid,
+                labels=g.labels,
+                priority=g.priority,
+            )
+            if target is not None:
+                await target.create_observation(**kwargs)
+            else:
+                await agent.create_observation(criticality=p.Criticality(g.criticality), **kwargs)
         else:
-            await agent.create_guideline(**kwargs)
+            kwargs = dict(
+                condition=g.condition or None,
+                action=g.action or None,
+                criticality=p.Criticality(g.criticality),
+                priority=g.priority,
+                canned_responses=canreps,
+                tools=tools,
+                track=g.track,
+                composition_mode=_composition_mode(g.composition_mode),
+                id=gid,
+                labels=g.labels,
+            )
+            if target is not None:
+                await journey_map[g.journey_ids[0]].create_guideline(**kwargs)
+            else:
+                await agent.create_guideline(**kwargs)
+
+    async def _build_relationships(
+        self,
+        agent: p.Agent,
+        definition: AgentDefinition,
+        guideline_ids: set[str],
+        journey_ids: set[str],
+    ) -> None:
+        """装配定义层 relationships（指南/旅程/工具间的语义关系）。
+
+        Parlant 关系图用 GUIDELINE / TAG_ALL / TOOL 三种实体（core/relationships.py）：
+        - 指南/观察 id（gdl_*）→ GUIDELINE（直接映射，创建时已保留定义层 id）
+        - 旅程 id（jny_*）→ 其旅程标签 TAG_ALL(journey:<id>)（与 SDK 旅程级指南同款表达）
+        - 内置工具名 → TOOL（service=built-in）
+
+        关系类型映射 RelationshipKind：蕴含/优先级/依赖/依赖任选/消歧/重评/重叠。
+        所有关系带 group_id=agent.id（卸载时按 group 清理，见 _delete_agent_entities）。
+        环检测（create_relationship 会拒绝成环）失败时定位到具体关系，不阻断加载。
+        """
+        suffix = _instance_suffix(agent.id)
+        relationship_store = self._server.container[RelationshipStore]
+        kind_map = {k.value: k for k in RelationshipKind}
+        created = skipped = 0
+        for rel in definition.relationships.relationships:
+            src = self._resolve_relationship_entity(rel.source, guideline_ids, journey_ids, suffix)
+            dst = self._resolve_relationship_entity(rel.target, guideline_ids, journey_ids, suffix)
+            kind = kind_map.get((rel.kind or "").lower())
+            if src is None or dst is None:
+                skipped += 1
+                logger.warning(
+                    f"关系引用无法解析，已跳过：{rel.source} → {rel.target} [{rel.kind}]"
+                    "（source/target 需为指南 id / 旅程 id / 内置工具名）"
+                )
+                continue
+            if kind is None:
+                skipped += 1
+                logger.warning(
+                    f"未知关系类型「{rel.kind}」已跳过（可选：{sorted(kind_map)}）"
+                )
+                continue
+            try:
+                await relationship_store.create_relationship(
+                    source=src, target=dst, kind=kind, group_id=agent.id
+                )
+                created += 1
+            except ValueError as exc:  # 环检测：create_relationship 拒绝成环
+                skipped += 1
+                logger.warning(
+                    f"关系创建被拒（可能成环）：{rel.source} → {rel.target} [{rel.kind}]: {exc}"
+                )
+        logger.info(f"装配 relationships：{created} 条生效，{skipped} 条跳过")
+
+    def _resolve_relationship_entity(
+        self,
+        ref: str,
+        guideline_ids: set[str],
+        journey_ids: set[str],
+        suffix: str,
+    ) -> RelationshipEntity | None:
+        """把定义层引用字符串解析为引擎关系实体（GUIDELINE / TAG_ALL / TOOL）；无法识别返回 None。"""
+        if not ref:
+            return None
+        if ref in guideline_ids:
+            return RelationshipEntity(
+                id=p.GuidelineId(f"{ref}{suffix}"),
+                kind=RelationshipEntityKind.GUIDELINE,
+            )
+        if ref in journey_ids:
+            return RelationshipEntity(
+                id=_Tag.for_journey_id(p.JourneyId(f"{ref}{suffix}")).id,
+                kind=RelationshipEntityKind.TAG_ALL,
+            )
+        if ref in BUILTIN_TOOLS:
+            return RelationshipEntity(
+                id=_tool_ref_to_id(resolve_tool(ref)),
+                kind=RelationshipEntityKind.TOOL,
+            )
+        return None

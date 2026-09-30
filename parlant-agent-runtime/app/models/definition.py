@@ -99,7 +99,7 @@ class Variables(_Base):
 class GuidelineDef(_Base):
     id: str
     condition: str = ""
-    action: str = ""
+    action: str | None = ""
     description: str = ""
     criticality: str = "medium"
     priority: int = 0
@@ -188,6 +188,11 @@ class ToolDef(_Base):
     timeout_seconds: float = 30.0
     consequential: bool = True
     input_schema: dict[str, Any] = Field(default_factory=dict)
+    # remote 远程服务（source="remote"）专用：通用 HTTP 工具配置
+    # （实现见 app/services/http_tools.py —— 每个 remote 工具 = 绑定此配置的闭包）
+    method: str = "GET"
+    url: str = ""
+    headers: dict[str, str] = Field(default_factory=dict)
 
 
 class Tools(_Base):

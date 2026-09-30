@@ -174,7 +174,11 @@ BUILTIN_TOOLS: dict[str, Any] = {
 
 
 def resolve_tool(name: str) -> Any:
-    """按定义层工具名解析 ToolRef；未知名称抛错并列出可用项。"""
-    if name not in BUILTIN_TOOLS:
-        raise KeyError(f"未知工具 '{name}'，可用内置工具：{sorted(BUILTIN_TOOLS)}")
-    return BUILTIN_TOOLS[name]
+    """按定义层工具名解析 ToolRef；内置未命中则查 remote 远程工具。"""
+    if name in BUILTIN_TOOLS:
+        return BUILTIN_TOOLS[name]
+    # remote 远程服务工具（通用 HTTP 内核，见 http_tools.py）——loader 装配时
+    # register_remote_tools 已按 schema 声明生成；此处兜底解析。
+    from app.services.http_tools import resolve_remote_tool
+
+    return resolve_remote_tool(name)
