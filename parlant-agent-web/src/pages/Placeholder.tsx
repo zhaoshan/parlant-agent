@@ -1,7 +1,7 @@
-/** 通用占位页（阶段3 后续实现：构建/版本/追踪/自动仿真/设置）。 */
+/** 通用占位页（阶段3 后续实现：构建/版本/追踪/自动仿真/设置；以及预留菜单：技能市场/渠道部署）。 */
 import { useNavigate } from 'react-router-dom'
 
-export default function Placeholder({ title, desc, backTo = '/simulate' }: { title: string; desc: string; backTo?: string }) {
+export default function Placeholder({ title, desc, backTo = '/simulate', backLabel = '返回模拟对话' }: { title: string; desc: string; backTo?: string; backLabel?: string }) {
   const navigate = useNavigate()
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -15,13 +15,13 @@ export default function Placeholder({ title, desc, backTo = '/simulate' }: { tit
             <path d="M12 8h.01M11 12h1v4h1" />
           </svg>
         </div>
-        <div className="text-[13px] font-medium text-[var(--ink-2)]">{title}（阶段3 后续实现）</div>
+        <div className="text-[13px] font-medium text-[var(--ink-2)]">{title}</div>
         <div className="mt-1.5 text-[12px] text-[var(--muted)]">{desc}</div>
         <button
           className="mt-5 inline-flex h-8 items-center rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-4 text-[12.5px] text-[var(--ink-2)] hover:bg-[#F1F5F9]"
           onClick={() => navigate(backTo)}
         >
-          返回模拟对话
+          {backLabel}
         </button>
       </div>
     </div>

@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { agentsApi } from '../api/client'
 import { useApp } from '../store/app'
-import { AutoIcon, BuildIcon, ChatIcon, GearIcon, PulseIcon } from './Icons'
+import { AutoIcon, BuildIcon, ChatIcon, DeployIcon, GearIcon, MarketIcon, PulseIcon } from './Icons'
 
 const NAV = [
   { to: '/build', label: 'Agent 构建', Icon: BuildIcon },
+  { to: '/skills', label: '技能市场', Icon: MarketIcon, reserved: true },
+  { to: '/deploy', label: '渠道部署', Icon: DeployIcon, reserved: true },
   { to: '/simulate', label: '模拟对话', Icon: ChatIcon },
   { to: '/auto-sim', label: '自动仿真', Icon: AutoIcon },
   { to: '/obs', label: '追踪与观测', Icon: PulseIcon },
@@ -128,7 +130,7 @@ export default function Sidebar() {
 
       {/* 导航 */}
       <nav className="flex-1 overflow-y-auto p-2">
-        {NAV.map(({ to, label, Icon }) => (
+        {NAV.map(({ to, label, Icon, reserved }) => (
           <NavLink
             key={to}
             to={to}
@@ -142,6 +144,9 @@ export default function Sidebar() {
           >
             <Icon className="opacity-75" />
             {label}
+            {reserved && (
+              <span className="ml-auto rounded bg-[#F1F5F9] px-1 py-px text-[9px] font-medium text-[var(--muted)]">预留</span>
+            )}
           </NavLink>
         ))}
       </nav>

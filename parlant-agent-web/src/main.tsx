@@ -21,6 +21,15 @@ createRoot(document.getElementById('root')!).render(
         <Route element={<AppLayout />}>
           <Route path="/build" element={<Build />} />
           <Route path="/build/versions" element={<Versions />} />
+          {/* 预留功能：技能市场（阶段7 技能平台）、渠道部署（阶段5 §5.8） */}
+          <Route
+            path="/skills"
+            element={<Placeholder title="技能市场" desc="技能插件的安装、配置与编排（预留 · 规划见 plan/阶段7-技能平台）" backTo="/build" backLabel="返回 Agent 构建" />}
+          />
+          <Route
+            path="/deploy"
+            element={<Placeholder title="渠道部署" desc="版本 × 渠道部署矩阵：钉钉 / 飞书 / web widget 接入（预留 · 规划见 plan/阶段5 §5.8）" backTo="/build" backLabel="返回 Agent 构建" />}
+          />
           <Route path="/simulate" element={<Simulate />} />
           <Route
             path="/auto-sim"

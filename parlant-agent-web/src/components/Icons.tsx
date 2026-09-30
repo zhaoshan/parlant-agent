@@ -81,3 +81,21 @@ export const SendIcon = (p: P) => (
     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
   </svg>
 )
+
+/** 技能市场：插件包（box） */
+export const MarketIcon = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M21 8l-9-5-9 5v8l9 5 9-5z" />
+    <path d="M3 8l9 5 9-5" />
+    <path d="M12 13v8" />
+  </svg>
+)
+
+/** 渠道部署：广播触达（broadcast） */
+export const DeployIcon = (p: P) => (
+  <svg {...base(p)}>
+    <circle cx="12" cy="12" r="1.6" />
+    <path d="M8.6 8.6a4.8 4.8 0 0 0 0 6.8M15.4 8.6a4.8 4.8 0 0 1 0 6.8" />
+    <path d="M5.8 5.8a8.7 8.7 0 0 0 0 12.4M18.2 5.8a8.7 8.7 0 0 1 0 12.4" />
+  </svg>
+)
