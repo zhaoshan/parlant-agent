@@ -708,6 +708,26 @@
         "labels": [],
         "enabled": true,
         "track": true
+      },
+      {
+        "id": "gdl_force_transfer",
+        "condition": "客户明确要求转接人工客服、人工顾问，或表达\"找人工\"、\"转人工\"、\"人工咨询\"等诉求",
+        "action": "必须立即为客户转接人工顾问：调用 transfer_to_human 工具并告知转接结果（工单号/客服代码）；不得声称\"无法转接人工\"或拒绝。即使当前正处在产品确认、犹豫或其他流程节点，也应优先满足转人工诉求。",
+        "description": "兜底：客户明确要人工时必须转接，禁止自由发挥\"无法转人工\"（修 sta_G 无转人工出口导致的错误说法）。",
+        "criticality": "high",
+        "priority": 100,
+        "composition_mode": "fluid",
+        "journey_ids": [],
+        "canned_responses": [],
+        "tools": [
+          "transfer_to_human"
+        ],
+        "variable_conditions": [],
+        "variable_updates_on_match": [],
+        "tags": [],
+        "labels": [],
+        "enabled": true,
+        "track": true
       }
     ]
   },
