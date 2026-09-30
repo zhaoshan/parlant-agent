@@ -1,5 +1,13 @@
 > 来源：docs/production/agentic-design.md，Parlant v3.3.1 官方英文文档中文翻译。
 
+> **⚠️ 官网更新注记（2026-09-30 核对，以 https://www.parlant.io/docs/production/agentic-design 为准）**
+> 本译文为本地 parlant 仓库 docs/ 的 v3.3.1 快照，官网已更新；经 parlant 源码溯源，
+> 下述差异多为「v3.3.1 代码已支持、仅文档过时」，已按官网回改正文：
+> - 回改项：预设话术小节由「把整个 Agent 的 composition_mode 设为 STRICT」改为**指南级动态严格组合**
+>   （仅对特定指南通过 `create_guideline(composition_mode=p.CompositionMode.STRICT)` 强制严格措辞，
+>   源码 sdk.py:1484 及 create_guideline 签名均支持指南级 composition_mode）
+> - 一致项保留：预设话术/旅程/工具复杂度、迭代流程、行为建模、总结
+
 # Agentic 设计方法论（Agentic Design Methodology）
 
 构建 AI 智能体与传统的软件开发相比，需要一种根本性的范式转变。本文探讨了创建有效的、面向客户的智能体所需的独特挑战、方法论和设计原则。
@@ -65,16 +73,22 @@ await agent.create_guideline(
 ```
 
 **稳健的解决方案：预设话术（Canned Responses）**
-对于真正关键的交互——未经授权的沟通可能引发问题——实现[预设话术（canned responses）](https://parlant.io/docs/concepts/customization/canned-responses)，并将智能体的组合模式（composition mode）设置为 `STRICT`：
+对于真正关键的交互——未经授权的沟通可能引发问题——实现[预设话术（canned responses）](https://parlant.io/docs/concepts/customization/canned-responses)。不过，与把整个 Agent 的组合模式（composition mode）一刀切地设为 `STRICT` 不同，官网推荐**指南级动态严格组合（guideline-level dynamic strict composition）**：只对特定指南强制 `STRICT`，让该指南在关键场景下使用预设话术的精确措辞：
 
 ```python
-await agent.create_canned_response(
-    template="I can help you with account questions, but I'll need to connect you "
-        "with a specialist for policy details. Would you like me to transfer you?"
+await agent.create_guideline(
+    condition="Customer requests a discount beyond the approved range",
+    composition_mode=p.CompositionMode.STRICT,
+    canned_responses=[
+        p.CannedResponse(
+            template="I can help you with account questions, but I'll need to connect you "
+                "with a specialist for policy details. Would you like me to transfer you?"
+        )
+    ],
 )
 ```
 
-预设话术确保在高风险场景下，智能体使用预先批准的措辞和内容，从而杜绝未经授权表述的可能性。是的，这需要更多的工作，但你可以迭代式地添加这些话术。关键在于构建一个你可以信任的、不会制造法律责任的智能体——即便是在百万分之一的交互中也不允许发生一次。
+预设话术确保在高风险场景下，智能体使用预先批准的措辞和内容，从而杜绝未经授权表述的可能性。是的，这需要更多的工作，但你可以迭代式地添加这些话术。关键在于构建一个你可以信任的、不会制造法律责任的智能体——即便是在百万分之一的交互中也不允许发生一次。这种方法让智能体在大多数交互中保持灵活，同时在你认为重要之处强制精确措辞（*This approach keeps your agent flexible in most interactions while enforcing exact wording where it matters.*）。
 
 这种“纵深防御（defense in depth）”的方法承认，与 LLM 共事意味着要学会引导、驾驭和约束，而非完全控制。它还意味着，_只要智能体的行为处于可接受的边界之内，_我们就必须允许一定程度的灵活性与响应变异性。
 

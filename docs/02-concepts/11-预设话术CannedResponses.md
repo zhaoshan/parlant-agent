@@ -1,4 +1,11 @@
 > 来源：concepts/customization/canned-responses.md，Parlant v3.3.1 官方英文文档中文翻译。
+>
+> **⚠️ 官网更新注记（2026-09-30 核对，以 https://www.parlant.io/docs/concepts/customization/canned-responses 为准）**
+> 本译文为本地 parlant 仓库 docs/ 的 v3.3.1 快照，官网已更新；经 parlant 源码溯源，
+> 下述差异多数为「v3.3.1 代码已支持、仅文档过时」，已按官网回改正文：
+> - 回改项：p.LoadedContext → p.EngineContext（自定义无匹配提供者 get_template 签名）
+> - 官网新增、未全文重写项：Guideline-Scoped Responses / Journey State-Scoped Responses / Dynamic Composition Mode（组合模式解析规则 STRICT > COMPOSITED > FLUID）/
+>   Guideline and Journey State Field Providers（canned_response_field_provider）/ canned response 携带 metadata（完整见官网对应页）
 
 # 预设话术（Canned Responses）
 
@@ -100,6 +107,108 @@ await agent.create_canned_response(template=TEXT)
 await journey.create_canned_response(template=TEXT)
 ```
 
+#### 指南作用域内的回复（Guideline-Scoped Responses）
+
+你可以将预设话术与特定指南关联起来。当指南被匹配时，这些回复会获得更高的优先级考虑。
+
+```python
+await agent.create_guideline(
+    condition="Customer asks about refund policy",
+    action="Explain the refund policy clearly",
+    canned_responses=[
+        await server.create_canned_response(
+            template="We offer full refunds within 30 days of purchase.",
+        ),
+        await server.create_canned_response(
+            template="Refunds typically process within 5-7 business days.",
+        ),
+    ]
+)
+```
+
+创建预设话术的方式很重要：
+
+* **`server.create_canned_response()`**：该回复**仅**在其关联指南处于激活状态时才会被考虑。当回复特定于该上下文、在其它地方没有意义时，使用这种方式。
+* **`agent.create_canned_response()`**：该回复始终可供智能体一般使用，但当其关联指南处于激活状态时，智能体被强制更认真地考虑它。当回复通常有用，但你希望在特定情况下确保其被优先考虑时，使用这种方式。
+
+#### 旅程状态作用域内的回复（Journey State-Scoped Responses）
+
+类似地，你可以将预设话术与特定的旅程聊天状态关联起来：
+
+```python
+t = await state.transition_to(
+    chat_state="Confirm the order details",
+    canned_responses=[
+        await server.create_canned_response(
+            template="Here's your order summary: {{order_summary}}. Does everything look correct?",
+        ),
+    ]
+)
+```
+
+同样的区别也适用：用 `server` 创建的回复仅在该旅程状态激活时才会被考虑，而用 `agent` 创建的回复始终可用，但在该状态激活时会获得更高的优先级。
+
+### 动态组合模式（Dynamic Composition Mode）
+
+虽然智能体级的组合模式是默认设置，但你可以根据激活的指南或旅程状态临时覆盖它。这让你能够在特定情境中更严格，而无需改变智能体的整体行为。
+
+#### 在指南上设置组合模式（Setting Composition Mode on Guidelines）
+
+当一条带有组合模式的指南被匹配时，它会临时覆盖智能体的默认设置。
+
+例如，你可以临时强制执行严格组合模式：
+
+```python
+await agent.create_guideline(
+    condition=CONDITION,
+    action=ACTION,
+    composition_mode=p.CompositionMode.STRICT,
+)
+```
+
+当然，这也适用于观察（没有动作的指南）。一个常见的技巧是强制智能体严格避免讨论离题或敏感的主题。特别是，你还可以添加只在这些情况下相关的预设话术。
+
+```python
+await agent.create_guideline(
+    condition="The customer is discussing offtopic subjects",
+    composition_mode=p.CompositionMode.STRICT,
+    canned_responses=[
+        await agent.create_canned_response(
+            template="I'm here to help with any questions about our products and services!",
+        )
+    ]
+)
+```
+
+#### 在旅程状态上设置组合模式（Setting Composition Mode on Journey States）
+
+你也可以在单个旅程聊天状态上设置组合模式：
+
+```python
+t = await state.transition_to(
+    chat_state=CHAT_STATE,
+    composition_mode=p.CompositionMode.COMPOSITED,
+)
+```
+
+或者在旅程级别设置，适用于该旅程内的所有状态（对更敏感的旅程尤其适用）：
+
+```python
+journey = await agent.create_journey(
+    title=MISSION_CRITICAL_OR_SENSITIVE_JOURNEY,
+    conditions=[CONDITION, ...],
+    composition_mode=p.CompositionMode.STRICT,
+)
+```
+
+#### 解析规则（Resolution Rules）
+
+当多个组合模式同时生效时（例如来自智能体配置、激活的旅程、多条被匹配的指南或旅程状态），**最严格的模式胜出：STRICT > COMPOSITED > FLUID**。
+
+这意味着，如果你的智能体默认为 `p.CompositionMode.FLUID`，但一条被匹配的指南指定了 `p.CompositionMode.STRICT`，那么回应将使用严格模式。一旦该指南不再激活，智能体将恢复其默认的流畅行为。
+
+这种方法让你能够在总体上保持智能体的灵活性，同时在支付、法律免责声明或敏感数据处理等高风险的场景中强制严格的控制。
+
 #### 开场白回复
 
 Parlant 通过运用[感知性能（perceived performance）](https://en.wikipedia.org/wiki/Perceived_performance#:~:text=Perceived%20performance%2C%20in%20computer%20engineering%2C%20refers%20to%20how%2C%20The%20concept%20applies%20mainly%20to%20user%20acceptance%20aspects.) 原理，采用了多种技术来增强对话的用户体验。其中一种技术就是使用**开场白回复（Preamble response）**。
@@ -187,6 +296,58 @@ def get_account_balance(context: p.ToolContext) -> p.ToolResult:
 await agent.create_canned_response(template="Your current balance is {{account_balance}}")
 ```
 
+### 指南与旅程状态的字段提供者（Guideline and Journey State Field Providers）
+
+你也可以使用 `canned_response_field_provider` 从被匹配的指南或旅程状态提供字段。当你需要基于当前激活的指南或旅程状态，将基于状态或基于上下文的值注入预设话术时，这非常有用。
+
+该提供者是一个接收 `p.EngineContext` 并返回字段名到值映射的异步函数：
+
+```python
+async def field_provider(ctx: p.EngineContext) -> dict[str, Any]:
+    return {FIELD_NAME: FIELD_VALUE, ...}
+```
+
+你可以像这样将它附加到观察、指南或旅程聊天状态上：
+
+```python
+await agent.create_observation(condition=CONDITION, canned_response_field_provider=field_provider)
+```
+
+```python
+await agent.create_guideline(
+    condition=CONDITION,
+    action=ACTION,
+    canned_response_field_provider=field_provider,
+)
+```
+
+```python
+await state.transition_to(chat_state=CHAT_STATE, canned_response_field_provider=field_provider)
+```
+
+当多条指南或旅程状态同时被匹配、且每一条都提供了字段提供者时，所有返回的字段会被合并，并可用于模板替换。
+
+下面是一个使用指南的示例：
+
+```python
+async def provide_lucky_number(ctx: p.EngineContext) -> dict[str, Any]:
+    return {"lucky_number": 42}
+
+await agent.create_guideline(
+    condition="Customer asks for their lucky number",
+    action="Tell them their lucky number",
+    canned_response_field_provider=provide_lucky_number,
+)
+```
+
+你的预设话术模板可以这样引用该字段：
+
+```python
+await agent.create_canned_response(
+    template="Your special number is {{lucky_number}}.",
+)
+```
+
 ## 让工具返回完整回复
 工具（Tool）也可以返回完整的预设话术以供考虑。当你希望根据工具的输出生成完整回复，而不仅仅是提供用于字段替换的数据时，这一点非常有用。它通常与复杂的问答（Q&A）检索场景特别相关。
 
@@ -201,6 +362,20 @@ def get_answer(context: p.ToolContext, question: str) -> p.ToolResult:
         canned_responses=[answer],
     )
 ```
+
+预设话术可以携带元数据（metadata），这些元数据会透传给前端，但对智能体不可见。这对于随回应发送 UI 提示、回复建议或其它前端特定数据非常有用。
+
+```python
+await agent.create_canned_response(
+    template="Here are your recommendations: {{recommendations}}",
+    metadata={
+        "reply_suggestions": ["Tell me more", "Show alternatives", "Add to cart"],
+        "display_mode": "carousel",
+    },
+)
+```
+
+当这条预设话术被选中时，元数据会包含在回应事件中，让你的前端能够访问它，用于渲染决策、建议回复或其它 UI 增强。
 
 ## 优化回复的选择
 
@@ -279,11 +454,11 @@ async with p.Server(
 #### 自定义无匹配提供者
 如果你需要更大的灵活性，你可以创建一个自定义的无匹配回复提供者（no-match response provider）。这使你能够根据对话上下文动态生成无匹配回复。
 
-不过请注意，`p.LoadedContext`（它让你能够访问引擎内部状态）在未来版本中可能会发生变化，所以请记住，你可能需要在某个时候相应地调整你的实现。
+不过请注意，`p.EngineContext`（它让你能够访问引擎内部状态）在未来版本中可能会发生变化，所以请记住，你可能需要在某个时候相应地调整你的实现。
 
 ```python
 class CustomNoMatchResponseProvider(p.NoMatchResponseProvider):
-    async def get_template(self, context: p.LoadedContext, draft: str | None) -> str:
+    async def get_template(self, context: p.EngineContext, draft: str | None) -> str:
         # Generate a custom no-match response based on the provided context,
         # such as the conversation history, draft message, guidelines, tool calls, etc.
         template = "..."

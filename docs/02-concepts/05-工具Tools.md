@@ -1,14 +1,60 @@
 > 来源：docs/concepts/customization/tools.md，Parlant v3.3.1 官方英文文档中文翻译。
 
+> **⚠️ 官网更新注记（2026-09-30 核对，以 https://www.parlant.io/docs/concepts/customization/tools 为准）**
+> 本译文为本地 parlant 仓库 docs/ 的 v3.3.1 快照，官网已更新；经 parlant 源码溯源，
+> 下述差异多数为「v3.3.1 代码已支持、仅文档过时」，已按官网回改正文：
+> - 回改项：`attach_tool` 已 deprecated（源码 sdk.py 明确 deprecated 提示）→ 改为 `create_observation(condition=..., tools=[...])` / `create_guideline(..., tools=[...])`；新增 关键性工具（Consequential Tools，`@p.tool(consequential=True)`，含 有/无参数 × 有/无副作用 四象限求值表）；工具内人工接管从 `ToolResult.control={"mode":"manual"}` 回改为 `p.Session.current.update(mode="manual")`、工具内转接改为 `p.Session.current.update(agent=...)`；访问器从 `p.ToolContextAccessor(context).server` + get_agent/get_customer 回改为 `p.Server.current / p.Agent.current / p.Customer.current / p.Session.current`；reevaluate_after 从 guideline 级扩展为 observation/整组 tag（`calculation_triggers.reevaluate_after(...)`）；补官网误报叙述引用（Mistral-7B 97% / GPT-4 91% / Yang et al. 2024 / Berkeley Leaderboard）
+> - 官网新增、未全文重写项：误报调用（False-Positive Invocations）研究引述完整列表，见官网对应页
+> - 源码未确认项：无（本页所列 API 均已溯源确认）
+
 # 工具（Tools）
 
-Parlant 提供了一种受引导的工具使用方式，并与它的指南系统紧密集成。
+工具是智能体采取行动的方式——查询数据库、调用 API、处理支付。
 
-Parlant 的工具调用方式是从零开始构建的。它很可能比你从大多数 LLM API（包括 [MCP](https://modelcontextprotocol.io/introduction)）中所熟悉的工具调用机制更加全面。这是因为它的构建目的是与其基于指南的行为控制实现深度、无缝的集成。
+在 Parlant 中，工具是上下文投递系统的一部分：只有当相关的[观察](/docs/concepts/customization/guidelines#the-core-primitive-observations)触发时，工具才会进入智能体的上下文，而不是"始终可用"。
 
-### 理解工具的使用
+这消除了困扰大多数 LLM 工具体系的误报工具调用——智能体脱离上下文急切地调用工具。
 
-在 Parlant 中，工具总是与特定的指南相关联。只有当其关联的指南与对话相匹配时，工具才会执行。这种设计创造了一条清晰的意图链：由指南决定工具何时以及为何被使用，而不是将其交给 LLM 的判断（后者充斥着错误）。
+### 理解误报调用（Understanding False-Positive Invocations）
+
+当工具在智能体的上下文中"始终可用"时，LLM 不只是偶尔误用它们——而是以惊人的频率这样做。
+
+[Yang et al., 2024](https://arxiv.org/abs/2406.12307) 发现，当用户的请求中缺少关键信息时，模型仍会在 **97%** 的情况下尝试调用工具（Mistral-7B），连 GPT-4 也有 **91%** 的概率——而人类参与者在识别不完整场景方面的失败率只有约 20%。
+
+[Berkeley 函数调用排行榜](https://gorilla.cs.berkeley.edu/blogs/8_berkeley_function_calling_leaderboard.html)（UC Berkeley）专门评测"不相关检测（irrelevance detection）"——即当提供的函数都不相关时，模型能否克制自己不去调用——并报告说，像 Claude Sonnet 和 GPT 这样的大模型得分低至 **49–55%**，基本上等于抛硬币。
+
+[ToolACE](https://arxiv.org/abs/2409.00920)（ICLR 2025）进一步记录了这一模式，将"幻觉式函数调用（hallucinated function calls）"确定为一个核心失败模式：模型在缺乏相关信息或指令的情况下，凭空编造对其上下文中工具的调用。
+
+### 将工具连接到观察（Connecting Tools to Observations）
+
+连接工具最简单的方式是通过一条观察。只有当观察的条件匹配时，该工具才对智能体可用。智能体使用工具自身的描述来决定如何调用它：
+
+```python
+@p.tool
+async def query_docs(context: p.ToolContext, user_query: str) -> p.ToolResult:
+    """Query the documentation knowledge base to answer user questions."""
+    ...
+
+await agent.create_observation(
+    condition="The user asks about service features",
+    tools=[query_docs],
+)
+```
+
+当工具本身不足以自解释——或者当你需要引导*如何*使用它时——改为把它与一条[指南](/docs/concepts/customization/guidelines#guidelines-observations-with-actions)搭配。指南的动作会提供额外的上下文，塑造工具调用的方式：
+
+```python
+await agent.create_guideline(
+    condition="The customer asks about the newest laptops",
+    action="First recommend the latest Mac laptops",
+    # The action ensures the tool is called with the right query
+    tools=[find_products_in_stock],
+)
+```
+
+> **注意：`attach_tool` 已废弃（deprecated）**
+>
+> 旧版文档中的 `await agent.attach_tool(condition=CONDITION, tool=my_tool)` 已废弃；请改用上面的 `create_observation(..., tools=[...])` 或 `create_guideline(..., tools=[...])` 方式。
 
 在 Parlant 中，**业务逻辑**（编码在工具中）被有意识地从**呈现**（用户界面）关注点，也就是从由指南控制的面向客户的行为中分离出来。
 
@@ -16,16 +62,19 @@ Parlant 的工具调用方式是从零开始构建的。它很可能比你从大
 
 #### 对话式 UI 与图形化 UI
 
-打个比方，你可以把指南和工具类比为图形化 UI 框架中的控件（Widgets）和事件处理器（Event Handlers）。一个 GUI 按钮有一个 `onClick` 事件，我们可以把它与某个 API 函数关联起来，表示 _"当这个按钮被点击时，运行这个函数。"_。同理，在 Parlant（本质上是一个对话式 UI 框架）中，指南就像按钮，工具就像 API 函数，而关联（就像注册一个事件处理器）将二者连接起来，表示 _"当这条指南被应用时，运行这个工具。"_
+打个比方，你可以把观察和工具类比为图形化 UI 框架中的控件（Widgets）和事件处理器（Event Handlers）。一个 GUI 按钮有一个 `onClick` 事件，我们可以把它与某个 API 函数关联起来，表示 _"当这个按钮被点击时，运行这个函数。"_。同理，在 Parlant（本质上是一个对话式 UI 框架）中，观察就像按钮，工具就像 API 函数，而关联（就像注册一个事件处理器）将二者连接起来，表示 _"当这条条件被检测到时，使这个工具可用。"_
 
 下面是一个具体示例来说明这些概念：
 > * **条件：** 用户询问服务功能
-> * **动作：** 理解他们的意图并查阅文档来回答
 > * **工具关联：** `[query_docs(user_query)]`
 
-在这里，只有当指南指示我们应当为这次用户交互查阅文档之后，文档查询工具才会运行。
+在这里，只有当观察指示我们应当为这次用户交互查阅文档之后，文档查询工具才会运行。
 
-## 编写工具
+> **智能体式 API 设计（Agentic API Design）**
+>
+> 要了解关于设计智能体工具的更多最佳实践，我们推荐阅读我们的博客文章 [Agentic Backends](https://parlant.io/blog/what-no-one-tells-you-about-agentic-api-design)。
+
+## 编写工具（Writing Tools）
 
 要编写一个工具，你需要定义一个函数，其第一个参数为 `ToolContext`，后面跟着你想传递给工具的任何其他参数。该函数应返回一个 `ToolResult`。
 
@@ -77,26 +126,24 @@ async def find_products(
     return p.ToolResult(products)
 ```
 
-## 将工具连接到你的智能体
+#### 关键性工具（Consequential Tools）
 
-要让你的智能体运行某个工具，你需要指定在什么条件下它可以被评估和调用。如前所述，这种方法有助于消除误报工具调用，这是 LLM 的常见问题。
+一个工具可以被标记为关键性（consequential）或非关键性（non-consequential），取决于它是否具有需要在执行前仔细评估的副作用，或其参数化是否需要付出额外努力以确保有效性和正确性。这个标记让 Parlant 知道，每当该工具出现在上下文中时，它需要以多高的精确度来审视它。
 
-```python
-@p.tool
-async def my_tool(context: p.ToolContext) -> p.ToolResult:
-  ...
+**默认情况下，工具被视为非关键性。** 该标记与工具是否具有参数这两者的组合，决定了 Parlant 如何评估它：
 
-await agent.create_guideline(
-    condition=CONDITION,
-    action=ACTION,
-    tools=[my_tool],
-)
-```
+|  | **有参数** | **无参数** |
+| --- | --- | --- |
+| **关键性（Consequential）** | 较慢、高精确地评估是否应调用该工具以及如何参数化 | 高精确地评估是否应调用该工具 |
+| **非关键性（Non-consequential，默认）** | 较快、浅层地评估是否应调用该工具以及如何参数化 | 即时乐观执行——只要工具被带入上下文就会调用 |
 
-如果工具本身就隐含了动作，你可以跳过手动指定它，让 Parlant 从工具的描述中推断出来。如下所示：
+如果工具具有需要在执行前仔细评估的副作用，将其标记为关键性：
 
 ```python
-await agent.attach_tool(condition=CONDITION, tool=my_tool)
+@p.tool(consequential=True)
+async def process_payment(context: p.ToolContext, amount: float) -> p.ToolResult:
+    """Process a payment transaction."""
+    ...
 ```
 
 ## 工具结果（ToolResult）
@@ -104,28 +151,6 @@ await agent.attach_tool(condition=CONDITION, tool=my_tool)
 `ToolResult` 是一个封装了工具调用结果的特殊对象。
 
 它有五个你可以使用的属性。虽然大多数时候你只会用到 `data` 属性，但了解其他属性是值得的，因为它们可以实现一些有趣的用例：`data`、`metadata`、`control`、`canned_responses` 和 `canned_response_fields`。
-
-> **工具结果的存续期（Lifespan）**
->
-> 与许多通用智能体框架不同，Parlant 专门并有意识地针对构建对话式智能体进行了优化。因此，其架构针对对话式应用优化了工具调用的默认行为。
->
-> 为此，工具结果默认保存在会话中，因此在整段交互会话期间都可供智能体引用。这意味着后续的指南匹配和工具调用会自动获知工具先前的返回结果。这对于需要稍后引用的结果（如账户余额、商品 ID 或其他产品信息）非常有用。
->
-> 例如，如果你调用了一个返回产品名称和 ID 的工具，并且——在客户通过选择某个特定产品作出回应之后——你又调用了另一个接受 `product_id` 参数的工具，那么智能体将能够利用前一个工具的结果，自动从上下文中填充该参数。例如：
-
-```python
-@p.tool
-async def get_products(context: p.ToolContext, query: str) -> p.ToolResult:
-    products = await MY_DB.get_products(query=query)
-    return p.ToolResult(data=products)
-
-@p.tool
-async def get_product_details(context: p.ToolContext, product_id: str) -> p.ToolResult:
-    # The agent will be able to parameterize the right `product_id`
-    # if the previous tool call was already made in the session.
-    product = await MY_DB.get_product(product_id=product_id)
-    return p.ToolResult(data=product)
-```
 
 ### 工具结果的属性
 
@@ -138,14 +163,18 @@ async def get_product_details(context: p.ToolContext, product_id: str) -> p.Tool
 这是 `ToolResult` 中*始终*必需的唯一属性，因为它是智能体用来理解交互事件历史的唯一属性。也就是说，如果你在 `data` 属性中不返回任何内容，智能体就不会被告知你的结果，也就无法利用它来引导交互。
 
 ```python
-# Example 1
-return p.ToolResult(data="This is the result of my tool call")
+async def check_flight_status(context: p.ToolContext, flight_number: str) -> p.ToolResult:
+  ...
+  return p.ToolResult(data="Flight ticket booked successfully!")
+```
 
-# Example 2
-return p.ToolResult(data={"appointments": [
-  { "id": "123", "date": "2023-10-01 10:00" },
-  { "id": "456", "date": "2023-10-02 11:00" },
-]})
+```python
+async def find_appointments(context: p.ToolContext, dates: list[datetime]) -> p.ToolResult:
+  ...
+  return p.ToolResult(data={"appointments": [
+    { "id": "123", "date": "2023-10-01 10:00" },
+    { "id": "456", "date": "2023-10-02 11:00" },
+  ]})
 ```
 
 #### Metadata（元数据）
@@ -176,22 +205,11 @@ return p.ToolResult(
 
 #### Control（控制）
 
-`control` 属性允许你为智能体和引擎指定控制指令。
+`control` 属性允许你为引擎指定控制指令。
 
-目前有两种可用的控制指令：
-- `"mode": p.SessionMode`：允许你将会话置于手动模式，这意味着智能体将不再自动生成响应。这特别适用于人工接管（human-handoff）场景，此时你希望暂停智能体的自动响应，让人类操作员接管。
-- `"lifespan": p.Lifespan`：控制 `ToolResult` 应存续多久。有两个选项：
-  - `"session"`：结果将被保存，并在整个会话期间供智能体使用。这是默认值。
-  - `"response"`：结果仅在当前响应期间可用。这对于超出当前响应就不再需要的临时结果很有用，例如报告错误，或提供极短暂的信息。
-
-```python
-return p.ToolResult(
-  data="Transferring to a human agent",
-  # Once this tool result is returned, the agent will not generate any more responses
-  # until the session is put back on automatic mode using an API call.
-  control={ "mode": "manual" },
-)
-```
+目前可用的控制指令是 `"lifespan": p.Lifespan`，它控制 `ToolResult` 应存续多久。有两个选项：
+- `"session"`：结果将被保存，并在整个会话期间供智能体使用。这是默认值。
+- `"response"`：结果仅在当前响应期间可用。这对于超出当前响应就不再需要的临时结果很有用，例如报告错误，或提供极短暂的信息。
 
 ```python
 return p.ToolResult(
@@ -202,77 +220,78 @@ return p.ToolResult(
 )
 ```
 
+#### 更新会话（Updating the Session）
+
+工具可以直接通过 `Session` 对象更新会话属性。这在[人工接管（human-handoff）](/docs/production/human-handoff)场景中尤其有用——此时你希望暂停智能体的自动响应，让人工操作员接管：
+
+```python
+session = p.Session.current
+
+# Switch to manual mode — the agent will stop generating automatic responses
+await session.update(mode="manual")
+
+return p.ToolResult(data="Transferring to a human agent")
+```
+
+你还可以将对话转接给另一个智能体：
+
+```python
+billing_agent = await p.Server.current.get_agent(id="billing_specialist")
+
+await p.Session.current.update(agent=billing_agent)
+
+return p.ToolResult(data="Transferring you to our billing specialist")
+```
+
 #### 预设话术（Canned Responses）
 
 工具还可以返回完整的预设话术（canned responses）以供考虑，以及用于在预设话术渲染期间进行替换的字段。有关预设话术属性的更多信息，请参阅[预设话术](https://parlant.io/docs/concepts/customization/canned-responses)章节。
 
-## 基于工具结果的指南重新评估
+### 工具结果的存续期（Tool Result Lifespan）
 
-在某些情况下，工具结果会影响哪些指南变得相关。以下是一个示例：
+与许多通用智能体框架不同，Parlant 专门并有意识地针对构建对话式智能体进行了优化。因此，其架构针对对话式应用优化了工具调用的默认行为。
 
-考虑一个处理转账的银行智能体。当用户请求转账时，一条条件为"用户想要转账"的指南会激活 `get_user_account_balance()` 工具以检查可用资金。该工具返回当前余额，随后可以基于其返回值触发额外的指南匹配。
+为此，工具结果默认保存在会话中，因此在整段交互会话期间都可供智能体引用。这意味着后续的观察匹配和工具调用会自动获知工具先前的返回结果。这对于需要稍后引用的结果（如账户余额、商品 ID 或其他产品信息）非常有用。
+
+例如，如果你调用了一个返回产品名称和 ID 的工具，并且——在客户通过选择某个特定产品作出回应之后——你又调用了另一个接受 `product_id` 参数的工具，那么智能体将能够利用前一个工具的结果，自动从上下文中填充该参数。例如：
+
+```python
+@p.tool
+async def get_products(context: p.ToolContext, query: str) -> p.ToolResult:
+    products = await MY_DB.get_products(query=query)
+    return p.ToolResult(data=products)
+
+@p.tool
+async def get_product_details(context: p.ToolContext, product_id: str) -> p.ToolResult:
+    # The agent will be able to parameterize the right `product_id`
+    # if the previous tool call was already made in the session.
+    product = await MY_DB.get_product(product_id=product_id)
+    return p.ToolResult(data=product)
+```
+
+## 基于工具结果的重新评估（Reevaluation Based on Tool Results）
+
+在某些情况下，工具结果会影响哪些观察和指南变得相关。以下是一个示例：
+
+考虑一个处理转账的银行智能体。当用户请求转账时，一条条件为"用户想要转账"的观察会激活 `get_user_account_balance()` 工具以检查可用资金。该工具返回当前余额，随后可以基于其返回值触发额外的匹配。
 
 例如，如果余额低于 500 美元，我们可能让一条"余额不足"指南激活，指示智能体说出类似这样的话：_"我看到您当前的余额较低。您确定要继续这笔转账吗？这笔交易可能会让您面临透支手续费的风险。"_
 
-在 Parlant 中，你可以将某些指南标记为在工具调用后重新评估。这意味着一旦工具被调用，指南匹配器将重新评估会话，以查看是否应根据工具结果激活任何新指南——在运行工具*之后*、生成响应*之前*。
+在 Parlant 中，你可以将某些观察或指南标记为在工具调用后重新评估。这意味着一旦工具被调用，匹配器将重新评估会话，以查看是否应根据工具结果激活任何新的观察或指南——在运行工具*之后*、生成响应*之前*。
 
 你可以这样做：
 
 ```python
-# The agent will ensure to reevaluate this guideline after running this tool
-await guideline.reevaluate_after(my_tool)
+# 在运行这个工具后，重新评估这条观察/指南
+await observation.reevaluate_after(my_tool)
 ```
 
-## 最佳实践
+你还可以在工具调用后重新评估**整组**（某个 tag 的全部）指南——当一次工具调用的结果可能同时影响多条相关指南时，这很有用：
 
-#### 关于自然语言编程的一点说明
-
-尽管 LLM 擅长对话式任务，但它们在复杂逻辑运算和多步骤规划方面仍很吃力。近期对 LLM 架构的研究表明，即便是先进模型也难以进行一致的逻辑推理和顺序决策。LLM 中的"规划问题"——将复杂任务分解为有序步骤并综合得出结论——在需要大规模保持一致时，仍然是一个重大的未解难题。
-
-鉴于这些局限，Parlant 采取一种务实的做法：将代码中的逻辑与行为建模分离。Parlant 不鼓励将业务逻辑嵌入指南，而是鼓励在对话行为与底层业务操作之间保持清晰的分离。
-
-将你的工具视为存放确定性、程序化业务逻辑的地方，而将指南视为你的对话界面设计。这种分离会产生更清晰、更易维护、更可靠的系统。
-
-> **智能体式 API 设计（Agentic API Design）**
->
-> 要了解关于设计智能体工具的更多最佳实践，我们推荐阅读我们的博客文章 [Agentic Backends](https://parlant.io/blog/what-no-one-tells-you-about-agentic-api-design)。
-
-#### 示例
-
-**1. 电商产品推荐：**
-
-不要这样做
-
-指南中包含复杂业务逻辑，过度依赖 LLM
-> * **指南动作：**
-> 如果用户提到运动，则查看其购买历史。
-> 如果他们买过跑步装备，则推荐高端跑鞋。
-> 如果他们是新用户，则推荐入门套装。
-> * **工具关联：** `[get_product_catalog]`
-
-应当这样做
-
-逻辑放在编码的推荐引擎中，这才是它该去的地方
-
-> * **指南动作：** 提供个性化推荐
-> * **工具关联：** `[get_personalized_recommendations]`
-
-**2. 财务咨询：**
-
-不要这样做
-
-财务分析逻辑依赖不可靠的 LLM 数值理解能力
-> * **指南动作：** 检查账户余额和最近交易。
->           如果支出超过通常模式的 80%，则建议进行预算审查。
->           如果投资回报下降，则建议调整投资组合。
-> * **工具关联：** `[get_account_data]`
-
-应当这样做
-
-财务分析逻辑由代码可靠地处理
-
-> * **指南动作：** 获取个性化财务洞察
-> * **工具关联：** `[get_financial_insights]`
+```python
+calculation_triggers = await agent.get_tag(name="calculation-triggers")
+await calculation_triggers.reevaluate_after(fetch_latest_credit_score_formulae)
+```
 
 ## 工具上下文（ToolContext）
 
@@ -286,26 +305,22 @@ await guideline.reevaluate_after(my_tool)
 4. `emit_message(message: str)`：向客户发回消息的方法。可用于在长时间运行的工具调用期间报告进度。
 5. `emit_status(status: p.SessionStatus)`：更新[会话状态](https://parlant.io/docs/concepts/sessions#status-event)的方法。
 
-#### 访问服务器对象（智能体、客户等）
+#### 访问当前实体（Accessing Current Entities）
 
-你还可以从 `ToolContext` 访问服务器对象，从而访问你的智能体、指南以及其他服务器级别的资源。
-
-要访问服务器对象，可以按如下方式使用 `p.ToolContextAccessor`：
+在工具（以及其它引擎钩子）内部，你可以使用便捷的 `.current` 访问器访问当前的服务器、智能体、客户和会话：
 
 ```python
 import parlant.sdk as p
 
 @p.tool
 async def my_tool(context: p.ToolContext) -> p.ToolResult:
-    server = p.ToolContextAccessor(context).server
+    server = p.Server.current
+    agent = p.Agent.current
+    customer = p.Customer.current
+    session = p.Session.current
 
-    # Access the current agent using the agent_id from the context
-    agent = await server.get_agent(id=context.agent_id)
-
-    # Access the current customer
-    customer = await server.get_customer(id=context.customer_id)
-
-    # ...
+    if variable := agent.find_variable(name="my_variable"):
+        value = variable.get_value()
 
     return p.ToolResult(...)
 ```
@@ -329,7 +344,7 @@ async def get_transactions(context: p.ToolContext) -> p.ToolResult:
 
 ## 工具洞察（Tool Insights）与参数选项
 
-由于 Parlant 的架构极度模块化，指南匹配、工具调用和消息撰写等组件彼此独立运行。虽然这种非单体式的方法在管理其复杂的语义逻辑方面带来诸多优势，但它也要求在这些组件之间传递上下文感知。
+由于 Parlant 的架构极度模块化，观察匹配、工具调用和消息撰写等组件彼此独立运行。虽然这种非单体式的方法在管理其复杂的语义逻辑方面带来诸多优势，但它也要求在这些组件之间传递上下文感知。
 
 **工具洞察（Tool Insights）** 是工具调用与消息撰写之间的桥接组件，确保当工具因某种原因（例如缺少必需参数）而无法被调用时，撰写组件能够知晓这一情况。
 
@@ -442,3 +457,50 @@ async def search_products(
 ) -> p.ToolResult:
   # your code here
 ```
+
+## 最佳实践
+
+#### 关于自然语言编程的一点说明
+
+尽管 LLM 擅长对话式任务，但它们在复杂逻辑运算和多步骤规划方面仍很吃力。近期对 LLM 架构的研究表明，即便是先进模型也难以进行一致的逻辑推理和顺序决策。LLM 中的"规划问题"——将复杂任务分解为有序步骤并综合得出结论——在需要大规模保持一致时，仍然是一个重大的未解难题。
+
+鉴于这些局限，Parlant 采取一种务实的做法：将代码中的逻辑与行为建模分离。Parlant 不鼓励将业务逻辑嵌入指南，而是鼓励在对话行为与底层业务操作之间保持清晰的分离。
+
+将你的工具视为存放确定性、程序化业务逻辑的地方，而将指南视为你的对话界面设计。这种分离会产生更清晰、更易维护、更可靠的系统。
+
+#### 示例
+
+**1. 电商产品推荐：**
+
+不要这样做
+
+指南中包含复杂业务逻辑，过度依赖 LLM
+> * **指南动作：**
+> 如果用户提到运动，则查看其购买历史。
+> 如果他们买过跑步装备，则推荐高端跑鞋。
+> 如果他们是新用户，则推荐入门套装。
+> * **工具关联：** `[get_product_catalog]`
+
+应当这样做
+
+逻辑放在编码的推荐引擎中，这才是它该去的地方
+
+> * **指南动作：** 提供个性化推荐
+> * **工具关联：** `[get_personalized_recommendations]`
+
+**2. 财务咨询：**
+
+不要这样做
+
+财务分析逻辑依赖不可靠的 LLM 数值理解能力
+> * **指南动作：** 检查账户余额和最近交易。
+>           如果支出超过通常模式的 80%，则建议进行预算审查。
+>           如果投资回报下降，则建议调整投资组合。
+> * **工具关联：** `[get_account_data]`
+
+应当这样做
+
+财务分析逻辑由代码可靠地处理
+
+> * **指南动作：** 获取个性化财务洞察
+> * **工具关联：** `[get_financial_insights]`

@@ -1,4 +1,5 @@
 > 来源：concepts/customization/glossary.md，Parlant v3.3.1 官方英文文档中文翻译。
+> ✅ 已核对（2026-09-30）：与官网一致。
 
 # 术语表（Glossary）
 

@@ -1,5 +1,7 @@
 > 来源：production/api-hardening.md，Parlant v3.3.1 官方英文文档中文翻译。
 
+> ✅ 已核对（2026-09-30）：与官网一致。
+
 # API 增强 (API Hardening)
 
 Parlant 提供了一套健壮的授权与限流系统，用于保护你的 API 免受未授权访问与滥用。本指南将说明如何实现自定义授权策略（authorization policy）与限流器（rate limiter），以加固你的生产环境部署。

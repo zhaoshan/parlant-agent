@@ -1,5 +1,12 @@
 > 来源：docs/concepts/sessions.md，Parlant v3.3.1 官方英文文档中文翻译。
 
+> **⚠️ 官网更新注记（2026-09-30 核对，以 https://www.parlant.io/docs/concepts/sessions 为准）**
+> 本译文为本地 parlant 仓库 docs/ 的 v3.3.1 快照，官网已更新；经 parlant 源码溯源，
+> 下述差异多数为「v3.3.1 代码已支持、仅文档过时」，已按官网回改正文：
+> - 回改项：新增 主动消息（Proactive Messages，agent.utter()）/ 标签（Labels，指南/旅程/状态标签自动传播到会话，`client.sessions.list(labels=[...])` AND 逻辑）/ 更新会话属性（Updating Session Properties，`p.Session.current.update(mode=manual / agent=... / title=...)`）/ 会话元数据（metadata.set/get/delete）/ 会话标签（labels.add/remove）/ MongoDB 需 `pip install "parlant[mongo]"`；「与智能体交互」整节（ParlantChatbox / Python·TS SDK / 事件 JSON）官网已迁移到 custom-frontend 页，正文改为链接指向该页
+> - 官网新增、未全文重写项：触发式响应（Triggered Responses）独立页，`agent.utter()` 完整用法见官网对应页
+> - 源码未确认项：Session 对象 metadata.get/delete 与 labels.add/remove（以官网为准，源码待核）
+
 # 会话 (Session)
 
 会话 (Session) 代表一个[智能体 (Agent)](https://parlant.io/docs/concepts/entities/agents)与一个[客户 (Customer)](https://parlant.io/docs/concepts/entities/customers)之间持续的交互。
@@ -62,6 +69,131 @@ sequenceDiagram
 >
 > 这是 Parlant 开发路线图上的一项请求功能，它将让你能够拥有多个与客户互动的智能体，或者让智能体彼此互动。该功能的另一个用例，是把客户转接给另一个 AI 智能体。
 
+## 主动消息（Proactive Messages）
+
+智能体还可以在无需等待客户输入的情况下发送消息——例如，在后台操作完成后跟进，或在客户闲置时主动询问。
+
+参见[触发式响应（Triggered Responses）](https://www.parlant.io/docs/advanced/triggered-responses)了解更多。
+
+## 标签（Labels）
+
+标签（Labels）是字符串标签，帮助你跨对话进行分类、筛选和追踪所发生的事情。
+
+你在创建[指南](/docs/concepts/customization/guidelines)、[旅程](/docs/concepts/customization/journeys)和旅程状态时设置标签。当这些实体在对话中匹配时，它们的标签会自动传播到会话。随着时间推移，会话会累积标签，为你提供一份"什么被激活过、何时被激活"的记录。
+
+### 标签为何重要
+
+在生产环境中，你需要回答这类问题："哪些对话触发了追加销售尝试？"、"多少会话以人工接管告终？"、"客户最常到达哪些旅程状态？"
+
+标签让这些问题变得容易回答：
+
+* **分析与优化**：哪些指南触发得最频繁？客户对追加销售尝试的反应如何？
+* **路由（Routing）**：根据累积的标签，将会话路由给专门的智能体或人工团队
+* **筛选（Filtering）**：列出所有涉及某个主题或触发过某个流程的会话
+
+### 设置标签
+
+你在创建指南、旅程或旅程状态时设置标签：
+
+```python
+await agent.create_guideline(
+    condition="The customer is interested in renewing their plan",
+    action="Suggest the new premium plan and explain its benefits",
+    labels=["upsell_attempt"],
+)
+```
+
+```python
+await agent.create_guideline(
+    condition="The customer is frustrated and wants to speak to a human",
+    action="Transfer the conversation to a human agent",
+    tools=[human_handoff],
+    labels=["human_handoff"],
+)
+```
+
+旅程上的标签以同样的方式工作：
+
+```python
+journey = await agent.create_journey(
+    title="Technical Support",
+    description="Handles technical issues",
+    conditions=["Customer reports a technical problem"],
+    labels=["support", "technical"],
+)
+```
+
+旅程状态上也是：
+
+```python
+step = await state.transition_to(
+    chat_state="Collect payment details",
+    labels=["payment", "sensitive"],
+)
+```
+
+### 按标签查询会话
+
+按标签查询已内建于客户端 SDK 中。当你传入多个标签时，筛选使用 **AND 逻辑**——只返回携带*所有*指定标签的会话。
+
+```python
+from parlant.client import ParlantClient
+
+client = ParlantClient(base_url="http://localhost:8800")
+
+# 拉取所有发生过追加销售尝试的会话
+upsell_sessions = client.sessions.list(labels=["upsell_attempt"])
+
+# 找到同时发生追加销售和人工接管的会话
+escalated_upsells = client.sessions.list(
+    labels=["upsell_attempt", "human_handoff"],
+)
+```
+
+## 更新会话属性（Updating Session Properties）
+
+在[工具](/docs/concepts/customization/tools)内部，你可以使用 `Session` 对象直接更新会话属性：
+
+```python
+session = p.Session.current
+
+# 更新会话模式（例如用于人工接管）
+await session.update(mode="manual")
+
+# 转接到另一个智能体
+billing_agent = await p.Server.current.get_agent(id="billing_specialist")
+await session.update(agent=billing_agent)
+
+# 设置会话标题
+await session.update(title="Billing inquiry - account upgrade")
+```
+
+### 元数据（Metadata）
+
+会话元数据（metadata）让你可以从工具内部为会话附加任意的键值数据。这是存储特定于会话的笔记、状态和记忆的好地方，你的工具或指南可能在对话后期需要这些信息：
+
+```python
+session = p.Session.current
+
+await session.metadata.set("topic", "billing")
+await session.metadata.set("priority", "high")
+
+topic = await session.metadata.get("topic")
+
+await session.metadata.delete("priority")
+```
+
+### 标签（Labels）
+
+除了从指南和旅程[自动传播的标签](#标签)之外，你还可以直接从工具内部添加或移除标签：
+
+```python
+session = p.Session.current
+
+await session.labels.add("escalated")
+await session.labels.remove("escalated")
+```
+
 ## 配置会话存储
 
 你可以选择会话的存储位置。
@@ -98,6 +230,12 @@ async def main():
 asyncio.run(main())
 ```
 
+安装 MongoDB 附加组件：
+
+```bash
+pip install "parlant[mongo]"
+```
+
 ## 事件驱动通信
 
 把 Parlant 中的会话想象成对话中发生的一切所构成的时间线。
@@ -123,141 +261,8 @@ graph LR
 
 每个事件还与一个 **trace ID（追踪 ID）** 相关联。这个 ID 主要用于追踪 AI 生成的消息与产生这些消息的引擎触发 (engine trigger) 之间的对应关系，包括可能为其提供信息的所有已生成的工具事件。这让我们能够轻松获取并理解每一次生成的消息所依赖的数据。例如，让你的前端客户端去检查某条消息已追踪的工具事件，你就能在该消息下方以"脚注"的形式展示相关信息。
 
-## 与智能体交互
+### 事件类型
 
-一旦 Parlant 服务器启动并运行，你就可以通过 [REST API](https://parlant.io/docs/api/create-session) 与其托管的智能体进行交互。
-
-你有三种选择：
-1. 使用官方 React 组件，快速轻松地与服务器集成
-2. 使用官方的 Python 或 TypeScript 客户端 SDK 来构建自定义前端应用
-3. 直接使用 [REST API](https://parlant.io/docs/api/create-session)，用你选择的语言向服务器发起 HTTP 请求
-
-### 使用官方 React 组件
-
-如果你的前端项目是用 React 构建的，最快、最简单的起步方式就是使用官方 Parlant React 组件与服务器集成。
-
-下面是一个基础代码示例：
-
-```jsx
-import React from 'react';
-import ParlantChatbox from 'parlant-chat-react';
-
-function App() {
-  return (
-    <div>
-      <h1>My Application</h1>
-      <ParlantChatbox
-        server="PARLANT_SERVER_URL"
-        agentId="AGENT_ID"
-      />
-    </div>
-  );
-}
-
-export default App;
-```
-
-如需更多文档和自定义选项，请参阅 **GitHub 仓库：** https://github.com/emcie-co/parlant-chat-react。
-
-```bash
-npm install parlant-chat-react
-```
-
-### 构建自定义前端
-
-如果你使用 Python 或 TypeScript 编码，可以使用官方原生的客户端 SDK，获得完全类型化的体验。
-
-**Python**
-```bash
-pip install parlant-client
-```
-
-**TypeScript**
-```bash
-npm install parlant-client
-```
-
-现在，我们来介绍一些基本用例。示例将以 Python 编写，但其它 SDK 的 API 几乎完全相同，你可以轻松地将它们适配到你偏好的语言。
-
-#### 初始化客户端
-```python
-from parlant.client import AsyncParlantClient
-
-# Change localhost to your server's address
-client = AsyncParlantClient(base_url="http://localhost:8800")
-```
-
-> **异步客户端？**
->
-> 这里的示例使用的是异步客户端，它是与 Parlant 交互的推荐方式。这让你能够实时处理事件而不会阻塞应用，通常也更适合生产环境。
->
-> 不过，如果你更喜欢同步客户端——例如你只是在做测试——你可以使用 `ParlantClient` 而不是 `AsyncParlantClient`。API 保持不变，但你无需在异步事件循环中运行。
-
-#### 创建会话
-```python
-await client.sessions.create(
-    agent_id=AGENT_ID,  # The ID of the agent to interact with
-    # Optional parameters
-    customer_id=CUSTOMER_ID,  # Optional: defaults to the guest customer's ID
-    title=SESSION_TITLE,  # Optional: session can be untitled
-)
-```
-
-#### 向智能体发送客户消息
-你可以通过在会话中创建一条新的消息事件来向智能体发送消息。这就是你发起对话或延续已有对话的方式。
-
-```python
-event = await client.sessions.create_event(
-    session_id=SESSION_ID,
-    kind="message",  # The event is of type 'message'
-    source="customer",  # The message is from the customer
-    message="Hello, I need help with my order.",
-)
-```
-
-#### 从智能体接收消息
-
-如前所述，与 LLM API 发送一个提示词后等待直接回复不同，Parlant 智能体根据自己的时间线、依据触发条件来运作，更像真实的对话伙伴。
-
-就像人类客服一样，它们处理信息，并根据自己对上下文的理解来决定何时以及如何回复。这让你能够构建更加灵活、可感知环境的智能体体验，从而主动地与客户互动。
-
-然而，这也意味着我们需要以不同的方式与它们通信。你可以这样做：
-
-```python
-new_events = await client.sessions.list_events(
-    session_id=SESSION_ID,
-    min_offset=EVENT_OFFSET,  # The offset of the last event you received (or created yourself)
-    wait_for_data=60,  # Wait for up to 60 seconds for new events, before timing out
-)
-```
-
-通常，你会把这种轮询放进一个循环里。这样，你就可以不断检查会话中的新事件，从而在智能体消息到达时（无论出于何种原因）异步地接收它们。
-
-```mermaid
-graph LR
-    A["Fetch new events"] -->|Timeout| A
-    A --> |New events| B["Display new events"]
-    B --> A
-```
-
-### 显示消息
-
-请参考下面的消息事件结构，了解如何在前端应用中显示消息。
-
-这里有一个简单示例：
-
-```python
-agent_message = next((m for m in new_events if m.kind == "message" and m.source == "ai_agent"), None)
-
-if agent_message:
-    print(f"Agent: {agent_message.data['message']}")
-```
-
-### 事件
-
-如果你决定构建自定义前端，这里有一份 Parlant 事件结构的快速概览。
-
-#### 事件类型
 Parlant 定义了几种可供你使用的事件类型：
 
 1. `"message"`：表示对话中某一参与者发送的一条消息。
@@ -265,17 +270,8 @@ Parlant 定义了几种可供你使用的事件类型：
 3. `"tool"`：表示 AI 智能体进行的一次工具调用的结果。
 4. `"custom"`：表示由你的应用定义的自定义事件。这对于向智能体输入自定义状态更新很有用，例如让它知晓客户在你前端应用中的导航状态。
 
-#### 事件偏移量
-如上所述，事件按偏移量排序，偏移量是一个数字，表示它们在会话中发生的先后顺序。会话中的第一个事件偏移量为 0，第二个为 1，以此类推。
+### 事件来源
 
-这很有用，因为当你在列出事件时，可以指定一个最小偏移量，从而只接收在某个时间点之后发生的事件。这让你无需重新获取所有先前事件，就能轮询新事件。
-
-#### 事件追踪 ID
-每个事件都有一个 trace ID（追踪 ID），它是一个唯一标识符，帮助你追踪相关事件及其日志。
-
-举一个例子：当 AI 智能体生成一条消息时，它也可能生成工具事件，这些工具事件为这条消息提供了额外的上下文或数据。trace ID 让你能够把这些事件关联起来，从而更容易理解信息的流动，以及智能体在会话中的处理过程。
-
-#### 事件来源
 Parlant 中的事件可以来自不同的来源。下面是可能来源的快速概览：
 
 1. `"customer"`：事件的数据由客户创建。目前，这总是一条消息。
@@ -285,28 +281,8 @@ Parlant 中的事件可以来自不同的来源。下面是可能来源的快速
 5. `"human_agent_on_behalf_of_ai_agent"`：与上面类似，事件由人工客服创建，但在客户看来就像来自 AI 智能体。当你不一定想让客户知道有人工介入的真相时，这有助于维持一致的体验。
 6. `"system"`：事件由系统生成，例如一次工具调用结果。
 
-#### 消息事件
-消息事件，顾名思义，表示某人所写的一条消息。
+### 状态事件
 
-```json
-{
-    id: EVENT_ID,
-    kind: "message",
-    source: EVENT_SOURCE,
-    offset: N,
-    trace_id: TRACE_ID,
-    data: {
-        message: MESSAGE,
-        participant={
-            id: PARTICIPANT_ID,
-            display_name: PARTICIPANT_DISPLAY_NAME
-        },
-        draft: OPTIONAL_DRAFT,  // Optional: if the message is a canned response
-    }
-}
-```
-
-#### 状态事件
 状态事件表示 AI 智能体状态的一次更新，目前它的来源总是 `"ai_agent"`。
 
 在与客户的聊天过程中，状态事件非常适合用来显示对话进展。例如，你可以让你的前端在智能体思考或输入时给出提示。你可以使用 6 种状态事件：
@@ -318,48 +294,10 @@ Parlant 中的事件可以来自不同的来源。下面是可能来源的快速
 1. `"ready"`：智能体处于空闲状态，准备接收新事件
 1. `"error"`：智能体在尝试生成回复时遇到了错误
 
-```json
-{
-    id: EVENT_ID,
-    kind: "status",
-    source: "ai_agent",
-    offset: N,
-    trace_id: TRACE_ID,
-    data: {
-        status: STATUS_KIND,
-        data: OPTIONAL_DATA
-    }
-}
-```
+> 完整的事件 schema（消息 / 状态 / 工具事件的 JSON 结构）与前端集成细节，参见[自定义前端集成（Custom Frontend Integration）](https://www.parlant.io/docs/production/custom-frontend)。
 
-#### 工具事件
-工具事件表示 AI 智能体进行的一次工具调用的结果。它包含工具调用的结果，可用于为智能体的下一条消息提供信息。
+## 与智能体交互
 
-每次调用的 `result` 对象直接来自工具调用返回的 [ToolResult](https://parlant.io/docs/concepts/customization/tools#tool-result) 对象。
+一旦 Parlant 服务器启动并运行，你就可以与它托管的智能体进行交互。
 
-```json
-{
-    id: EVENT_ID,
-    kind: "tool",
-    source: "system",
-    offset: N,
-    trace_id: TRACE_ID,
-    data: {
-        tool_calls: [
-            {
-                tool_id: TOOL_ID,
-                arguments: {
-                    NAME: VALUE,
-                    ...
-                },
-                result: {
-                    data: TOOL_RESULT_DATA,  // The result of the tool call
-                    metadata: TOOL_RESULT_METADATA,  // Optional metadata about the tool result
-                    ... // Other available fields
-                }
-            },
-            ...
-        ]
-    }
-}
-```
+完整的交互与集成方式——使用官方 React 组件（ParlantChatbox）、使用官方 Python 或 TypeScript 客户端 SDK 构建自定义前端，以及直接使用 [REST API](https://parlant.io/docs/api/create-session)——官网已从本页迁移到[自定义前端集成（Custom Frontend Integration）](https://www.parlant.io/docs/production/custom-frontend)页面，请前往该页获取最新说明。

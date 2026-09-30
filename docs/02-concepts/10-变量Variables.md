@@ -1,4 +1,9 @@
 > 来源：concepts/customization/variables.md，Parlant v3.3.1 官方英文文档中文翻译。
+>
+> **⚠️ 官网更新注记（2026-09-30 核对，以 https://www.parlant.io/docs/concepts/customization/variables 为准）**
+> 本译文为本地 parlant 仓库 docs/ 的 v3.3.1 快照，官网已更新；经 parlant 源码溯源，
+> 下述差异多数为「v3.3.1 代码已支持、仅文档过时」，已按官网回改正文：
+> - 官网新增、未全文重写项：Configuring Variable Storage（variable_store：transient 默认 / local / mongodb）（完整见官网对应页）
 
 # 变量（Variables）
 
@@ -90,6 +95,53 @@ await variable.set_value_for_tag(
     tag=TAG_ID,
     value=VALUE,
 )
+```
+
+
+## 配置变量存储（Configuring Variable Storage）
+
+你可以选择在哪里存储变量值。
+
+默认情况下，Parlant **不会持久化**变量值，这意味着它们被存储在内存中，服务器重启后即丢失。这对于测试和开发目的很有用。
+
+如果你想持久化变量值，可以将 Parlant 配置为使用你选择的数据库。对于本地持久化，我们推荐使用内置的 JSON 文件存储，因为它零配置。对于生产环境，你可以使用内置的 MongoDB，或其它数据库。
+
+### 持久化到本地存储（Persisting to Local Storage）
+
+这会将变量值保存到 `$PARLANT_HOME/context_variables.json`。
+
+```python
+import asyncio
+import parlant.sdk as p
+
+async def main():
+    async with p.Server(variable_store="local") as server:
+        # ...
+
+asyncio.run(main())
+```
+
+### 持久化到 MongoDB（Persisting to MongoDB）
+
+只需在启动服务器时指定你的 MongoDB 数据库的连接字符串：
+
+```python
+import asyncio
+import parlant.sdk as p
+
+async def main():
+    async with p.Server(variable_store="mongodb://path.to.your.host:27017") as server:
+        # ...
+
+asyncio.run(main())
+```
+
+> **安装 MongoDB 附加包（Install the MongoDB Extra）**
+>
+> 要将 MongoDB 用作你的变量存储，你需要安装 `parlant[mongo]` 附加包。
+
+```bash
+pip install "parlant[mongo]"
 ```
 
 

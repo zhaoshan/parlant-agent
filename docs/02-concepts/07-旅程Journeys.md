@@ -1,4 +1,12 @@
 > 来源：concepts/customization/journeys.md，Parlant v3.3.1 官方英文文档中文翻译。
+>
+> **⚠️ 官网更新注记（2026-09-30 核对，以 https://www.parlant.io/docs/concepts/customization/journeys 为准）**
+> 本译文为本地 parlant 仓库 docs/ 的 v3.3.1 快照，官网已更新；经 parlant 源码溯源，
+> 下述差异多数为「v3.3.1 代码已支持、仅文档过时」，已按官网回改正文：
+> - 回改项：工具状态→工具状态转移（官网：技术上允许、不推荐，非禁止）/ fork 代码形态（fork.target.transition_to）
+> - 官网新增、未全文重写项：Journey Activation 激活语义 / State Descriptions / Linking Journeys（p.JourneyTransition）/
+>   Match Handlers / Common Patterns（p.END_JOURNEY、分支汇合）/ Best Practices 5 条 / How Journey Matching Works（完整见官网对应页）
+> - 源码未确认项：旅程/状态的 on_match、on_message 钩子（以官网为准，源码待核）
 
 # 旅程（Journeys）
 
@@ -13,6 +21,10 @@
 1. **条件（Conditions）：** 这些上下文查询（contextual queries）决定了旅程应在何时处于激活状态。
 1. **描述（Description）：** 它让你能够描述旅程的性质，在需要时也可以包含一些动机说明或定位说明。
 1. **状态与转移（States & Transitions）：** 一个状态图（state diagram），向智能体传达理想的流程是什么。
+
+> **旅程激活（Journey Activation）**
+>
+> 条件匹配只影响旅程的**初始激活**。一旦旅程处于激活状态，它会一直保持激活，直到下一步选择（next-step selection）过程决定将其停止。旅程处于进行中之后，其条件不会在每一轮被重新评估。
 
 > **在严格性与灵活性之间取得平衡（Balancing Rigidity vs. Flexibility）**
 >
@@ -131,9 +143,11 @@ t = await state.transition_to(tool_state=TOOL, tool_instruction=OPTIONAL_HINT_ON
 
 > **从工具状态转移到聊天状态（Transitioning from Tool to Chat）**
 >
-> 当从工具状态转移到聊天状态时，智能体会自动将工具的结果加载到上下文中，因此你可以在聊天状态的动作中使用它。请注意，工具状态不能转移到另一个工具状态；它之后必须始终紧跟一个聊天状态。
+> 当从工具状态转移到聊天状态时，智能体会自动将工具的结果加载到上下文中，因此你可以在聊天状态的动作中使用它。
 >
-> 这是有意为之的设计，因为在智能体应用（agentic applications）中，工具的使用会带来可感知的延迟。与其使用连续的工具状态，不如使用单个工具状态来执行所有必要的动作，然后再紧跟一个聊天状态向客户展示结果。
+> 请注意，虽然**技术上允许**，但我们并不推荐让一个工具状态转移到另一个工具状态；理想情况下，它之后应始终紧跟一个聊天状态，因为在智能体应用（agentic applications）中，工具的使用会带来可感知的延迟。
+>
+> 与其使用连续的工具状态，不如尝试使用单个工具状态（为此目的配备专用工具）来执行所有必要的动作，然后再紧跟一个聊天状态向客户展示结果。
 
 #### 转移（Transitions）
 1. **直接转移（Direct Transitions）：** 这些转移应始终被采用。它们在不产生分支的情况下推动对话向前进行。
@@ -166,9 +180,9 @@ t = await state.transition_to(state=EXISTING_STATE, condition=CONDITION)
 ```python
 fork = await state.fork()
 
-t1 = await fork.transition_to(chat_state=CONVERSATIONAL_INSTRUCTION, condition=CONDITION_1)
-t2 = await fork.transition_to(chat_state=CONVERSATIONAL_INSTRUCTION, condition=CONDITION_2)
-t3 = await fork.transition_to(tool_state=TOOL, condition=CONDITION_3)
+t1 = await fork.target.transition_to(chat_state=CONVERSATIONAL_INSTRUCTION, condition=CONDITION_1)
+t2 = await fork.target.transition_to(chat_state=CONVERSATIONAL_INSTRUCTION, condition=CONDITION_2)
+t3 = await fork.target.transition_to(tool_state=TOOL, condition=CONDITION_3)
 ```
 
 > **可视化你的旅程（Visualizing Your Journey）**
@@ -180,6 +194,35 @@ t3 = await fork.transition_to(tool_state=TOOL, condition=CONDITION_3)
 > 3. 在浏览器中访问 `http://localhost:8800/journeys/<JOURNEY_ID>/mermaid`，将 `<JOURNEY_ID>` 替换为你复制的 ID。
 > 4. 复制生成的 Mermaid 图代码。
 > 5. 将其粘贴到 [Mermaid live editor](https://mermaid.live/) 中以可视化该旅程。
+
+### 状态描述（State Descriptions）
+
+当聊天状态的指令需要更详细的阐述——或者当试错表明智能体未能按你的意图解读它时——你可以提供一个更详尽的 `description`：
+
+```python
+t = await state.transition_to(
+    chat_state="Confirm the booking details",
+    description="""At this point, summarize all collected information: destination,
+dates, number of travelers, and selected flight options. Ask the customer
+to verify everything is correct before proceeding to payment."""
+)
+```
+
+当该状态处于激活状态时，此描述会被包含在智能体的上下文中，帮助它更好地理解该动作。
+
+### 连接旅程（Linking Journeys）
+
+你可以通过转移到另一个旅程来将旅程连接在一起。这允许你创建模块化、可复用的旅程，并将它们组合成更大的流程。转移可以是直接转移或条件转移。
+
+```python
+t = await state.transition_to(journey=EXISTING_JOURNEY)
+```
+
+```python
+t = await state.transition_to(condition=CONDITION, journey=EXISTING_JOURNEY)
+```
+
+这返回一个 `p.JourneyTransition`，让你可以在子旅程完成后继续构建流程。
 
 ## 旅程 vs. 任务自动化（Journey vs. Task Automation）
 如果你查看引擎与旅程的协作方式，就会明白旅程不应该被用来指导模型如何自动化执行任务。相反，旅程被智能体用来进行自我定位（self-orientate），并根据你的偏好来引导对话流程。
@@ -292,48 +335,166 @@ guideline = await journey.create_guideline(
 >
 > 要了解更多关于指南的信息，请查看[指南（Guidelines）](https://parlant.io/docs/concepts/customization/guidelines)页面。
 
+## 匹配处理器（Match Handlers）
+
+> **源码未确认：** 以下旅程/状态的 `on_match` / `on_message` 钩子为官网描述，v3.3.1 源码待核，以官网为准。
+
+你可以在旅程或单个状态上注册处理器，以触发诸如日志记录、分析或外部集成之类的副作用。每一层都支持两个钩子：`on_match`（在回应之前）和 `on_message`（在回应之后）。
+
+#### 旅程级处理器（Journey-Level Handlers）
+
+这些处理器针对整个旅程触发，每次旅程被匹配时都会触发，无论哪个状态处于激活状态：
+
+```python
+async def on_journey_activated(ctx: p.EngineContext, match: p.JourneyMatch) -> None:
+    await analytics.track("journey_hit", {
+        "journey": match.journey_id,
+        "customer": ctx.customer.id,
+    })
+
+journey = await agent.create_journey(
+    title="Book Flight",
+    conditions=["The customer requested to book a flight"],
+    description="This journey guides the customer through the flight booking process.",
+    on_match=on_journey_activated,
+)
+```
+
+* **`on_match`**：当旅程被激活时触发，在智能体生成回应之前。
+* **`on_message`**：当旅程处于激活状态且智能体发送消息之后触发。
+
+#### 状态级处理器（State-Level Handlers）
+
+针对特定状态触发，让你在流程的各个节点上拥有更细粒度的钩子。
+
+**`on_match`**——当智能体转移到某个状态、在生成回应之前被调用：
+
+```python
+async def my_handler(ctx: p.EngineContext, match: p.JourneyStateMatch) -> None:
+    ...
+
+await state.transition_to(chat_state=CHAT_STATE, on_match=my_handler)
+```
+
+**`on_message`**——当智能体在该状态中生成并发送消息之后被调用：
+
+```python
+await state.transition_to(chat_state=CHAT_STATE, on_message=my_handler)
+```
+
+## 常见模式（Common Patterns）
+
+### 标记终结状态（Marking Terminal States）
+
+你可以通过转移到 `p.END_JOURNEY` 来显式标记旅程的结束：
+
+```python
+await state.transition_to(state=p.END_JOURNEY)
+```
+
+这标志着旅程在此处已完成。一个旅程可以有多个终点——例如，在成功预订之后结束，*或*在客户取消之后结束：
+
+```python
+# 成功路径
+t5 = await t4.target.transition_to(chat_state="Confirm the appointment has been scheduled")
+await t5.target.transition_to(state=p.END_JOURNEY)
+
+# 取消路径
+t8 = await t7.target.transition_to(chat_state="Ask the patient to call the office")
+await t8.target.transition_to(state=p.END_JOURNEY)
+```
+
+请注意，没有后续转移的状态本质上是终结状态——当无路可走时，旅程即结束。`p.END_JOURNEY` 在以下场景中最有用：某个状态*可能*根据条件继续转移到另一个状态*或*结束旅程，此时它能让意图对引擎和阅读代码的其他开发人员都变得明确。
+
+### 分支与汇合路径（Branching and Merging Paths）
+
+现实世界的旅程常常会分支到备选路径，之后再汇合回共享流程。你可以通过转移到**已存在的状态节点**而非创建新节点来实现这一点：
+
+```python
+# 分支：备选路径
+t6 = await t2.target.transition_to(tool_state=get_later_slots, condition="None work")
+t7 = await t6.target.transition_to(chat_state="List later times")
+
+# 汇合：重新连接回主路径的确认状态
+await t7.target.transition_to(state=t3.target, condition="The patient picks a time")
+```
+
+这让旅程保持 DRY——确认与排期逻辑只定义一次，被两条路径复用。
+
+## 最佳实践（Best Practices）
+
+#### 1. 转移完整性（Transition Completeness）
+
+当一个状态有多条条件转移时，这些条件应该是**非重叠**且**穷尽**的——它们应无歧义地覆盖所有可能的后续走向。
+
+**不要（DON'T）**
+
+```python
+# 不好：条件重叠——"over 21" 是 "over 18" 的子集
+t1 = await age_state.transition_to(
+    chat_state="Offer standard plan",
+    condition="The customer is over 18",
+)
+t2 = await age_state.transition_to(
+    chat_state="Offer premium plan",
+    condition="The customer is over 21",
+)
+```
+
+**应该（DO）**
+
+```python
+# 好：非重叠、穷尽的条件
+t1 = await age_state.transition_to(
+    chat_state="Explain they are not eligible",
+    condition="The customer is under 18",
+)
+t2 = await age_state.transition_to(
+    chat_state="Offer standard plan",
+    condition="The customer is 18-20",
+)
+t3 = await age_state.transition_to(
+    chat_state="Offer premium plan",
+    condition="The customer is 21 or older",
+)
+```
+
+> **注意：** 这是最佳实践，而非 SDK 强制约束。即使在条件不完美的情况下，引擎也会尽力选择正确的转移，但清晰、非重叠的条件能显著提高可靠性。
+
+#### 2. 尽可能避免使用分叉（Avoid Forks When Possible）
+
+来自聊天状态的条件转移与分叉效果相同，且不那么笨重。在评估期间，分叉状态会被"压扁（squished）"——其条件被折叠进其后续状态的条件中——这会增加评估成本，却不会增加表达能力。只要前一个状态已经是聊天状态，就优先使用来自聊天状态的直接条件转移。
+
+#### 3. 不允许连续分叉（Consecutive Forks Are Not Allowed）
+
+两个连续的分叉状态永远是冗余的——任何背靠背分叉的旅程都可以简化为一个带更多条件的单一分叉。**SDK 强制执行此约束**，如果你尝试这样做，它会抛出错误。
+
+#### 4. 在重要工具调用之前进行确认（Verify Before Important Tool Calls）
+
+在执行重要动作（例如排期、处理支付、下单）的工具状态之前，始终添加一个确认聊天状态。这给了客户在动作执行之前审查和纠正细节的机会——正如医疗保健示例中在 `schedule_appointment` 之前的"确认详情"状态所展示的那样。
+
+#### 5. 尽可能使用旅程作用域的指南（Use Journey-Scoped Guidelines When Possible）
+
+对于仅适用于特定流程内的行为，优先使用旅程作用域的指南而非全局指南。旅程作用域的指南只在其父旅程激活时才被评估，这避免了冗余的指南检查，并减少了每次回应所需的 LLM 调用次数。
+
 ## 旅程作用域的预设话术（Journey-Scoped Canned Responses）
-你还可以把预设话术（canned responses）附加到旅程上，将它们作用域限定到这些旅程，使得只有当它们依赖的旅程处于激活状态时，这些预设话术才会被考虑。
 
-```python
-await journey.create_canned_response(
-    template="What destination are you interested in?",
-)
-
-await journey.create_canned_response(
-    template="I'm sorry, but I can't assist with that right now. Shall we go on with booking your flight?",
-)
-```
-
-#### 状态作用域的预设话术（State-Scoped Canned Responses）
-你还可以将特定的预设话术与旅程中的特定状态关联起来。
-
-状态作用域的预设话术有两种模式：**显式考虑（Explicit Consideration）**和**独占考虑（Exclusive Consideration）**。
-
-1. **显式考虑：** 在此模式下，智能体将确保当处于该状态时，相关联的回应始终会被纳入选择考虑。这是通过在 `journey` 或 `agent` 对象下创建预设话术来实现的。
-```python
-await state.transition_to(
-    chat_state="Ask if they have a destination in mind",
-    canned_responses=[
-        await journey.create_canned_response(
-            template="What destination are you interested in?",
-        ),
-    ],
-)
-```
-2. **独占考虑：** 在此模式下，智能体在该状态时只会考虑相关联的回应。在其他任何时间它都不会使用这些回应。这是通过在 `server` 对象下创建预设话术来实现的。
-
-```python
-await state.transition_to(
-    chat_state="Ask if they have a destination in mind",
-    canned_responses=[
-        await server.create_canned_response(
-            template="What destination are you interested in?",
-        ),
-    ],
-)
-```
-
-> **了解更多（Learn More）**
+> **内容迁移（2026-09-30）：** 官网 journeys 页已删除「旅程作用域预设话术」整节（含状态作用域预设话术的显式/独占考虑两种模式），相关内容已迁至[预设话术（Canned Responses）](https://parlant.io/docs/concepts/customization/canned-responses)页面。
 >
-> 要了解更多关于预设话术的信息，请查看[预设话术（Canned Responses）](https://parlant.io/docs/concepts/customization/canned-responses)页面。
+> 对应本地译文为《11-预设话术CannedResponses.md》，请到该页面查看 `journey.create_canned_response()`、`transition_to(chat_state=..., canned_responses=[...])` 的详细说明与代码示例。
+
+## 旅程匹配是如何工作的（How Journey Matching Works）
+
+在每次回应之前，Parlant 通过一个多阶段流程来确定哪些旅程和状态是相关的：
+
+1. **旅程条件匹配（Journey condition matching）：** 旅程条件由 `GuidelineMatcher` 评估，将对话上下文与每个旅程的激活条件进行匹配。
+2. **状态加载（State loading）：** 对于匹配到的旅程，引擎基于最后执行的状态加载相关的后续状态及其转移。
+3. **节点选择（Node selection）：** 引擎确定智能体应处于哪个状态（见下文）。
+4. **消息合成（Message composition）：** 所选状态的指令，连同任何匹配到的指南，输入到消息合成器（message composer）。
+
+当一个旅程被匹配时，引擎通过两个并行评估来确定智能体的位置：
+
+1. **回溯检查（Backtrack Check）：** 客户是否改变了之前的决定，或者他们是否想重做旅程的某一部分？如果是，引擎会在图中遍历以找到应返回的正确步骤。
+2. **下一步选择（Next Step Selection）：** 当前步骤是否已完成？如果是，应选择哪条转移？这使用**可达后续节点（reachable follow-ups）**——从当前节点预计算的多步路径——因此当客户一次性提供多条信息时，引擎可以在单次评估中快进（fast-forward）多个节点。
+
+如果需要回溯，回溯结果优先，下一步选择的结果被丢弃。否则，下一步选择的结果使旅程向前推进。
