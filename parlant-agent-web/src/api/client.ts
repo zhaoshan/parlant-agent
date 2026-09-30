@@ -113,6 +113,37 @@ export const sessionsApi = {
   eventsUrl: (sessionId: string, minOffset = 0) => `/api/sessions/${sessionId}/events?min_offset=${minOffset}`,
 }
 
+// ---------- 旅程流程图布局（连线挂载点 + 节点坐标，纯 UI，独立于定义层） ----------
+export type AnchorSide = 'top' | 'right' | 'bottom' | 'left'
+export interface EdgeAnchors {
+  /** 源端挂载点；缺省 = 自动（按几何关系） */
+  from_anchor?: AnchorSide
+  /** 目标端挂载点；缺省 = 自动 */
+  to_anchor?: AnchorSide
+}
+export interface NodePos {
+  /** 节点方块左上角在画布中的坐标 */
+  x: number
+  y: number
+}
+export interface JourneyLayout {
+  agent_id: string
+  journey_id: string
+  edges: Record<string, EdgeAnchors>
+  /** 用户拖拽落点（partial 覆盖自动布局）；旧文档可能无此字段 */
+  nodes?: Record<string, NodePos>
+}
+export const journeyLayoutsApi = {
+  get: (agentId: string, journeyId: string) =>
+    request<JourneyLayout>(`/api/agents/${agentId}/journeys/${encodeURIComponent(journeyId)}/layout`),
+  save: (agentId: string, journeyId: string, layout: { edges: Record<string, EdgeAnchors>; nodes: Record<string, NodePos> }) =>
+    request<JourneyLayout>(`/api/agents/${agentId}/journeys/${encodeURIComponent(journeyId)}/layout`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(layout),
+    }),
+}
+
 // ---------- 链路历史（langfuse，经 server 代理取数） ----------
 export const tracesApi = {
   /** 拉取一个 trace 的全部 observation（扁平数组，前端组树） */
