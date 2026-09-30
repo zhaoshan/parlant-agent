@@ -1,8 +1,9 @@
-/** Agent 首页（onboarding）：无侧栏，全宽卡片 + 搜索 + 创建。 */
+/** Agent 首页（onboarding）：无侧栏，全宽卡片 + 搜索 + 创建 + JSON 导入。 */
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { agentsApi } from '../api/client'
 import type { AgentInfo } from '../api/types'
+import ImportDialog from '../components/ImportDialog'
 import { useApp } from '../store/app'
 import { agentLabel } from '../utils/agent'
 
@@ -12,6 +13,7 @@ export default function Home() {
   const [agents, setLocal] = useState<AgentInfo[]>([])
   const [kw, setKw] = useState('')
   const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all')
+  const [importOpen, setImportOpen] = useState(false)
 
   useEffect(() => {
     agentsApi
@@ -53,7 +55,7 @@ export default function Home() {
         <div className="ml-auto flex items-center gap-2">
           <button
             className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[var(--line-strong)] bg-[var(--surface)] px-3.5 text-[12.5px] font-medium text-[var(--ink-2)] hover:bg-[#F1F5F9]"
-            onClick={() => alert('JSON 导入（阶段4 实现）')}
+            onClick={() => setImportOpen(true)}
           >
             导入 JSON
           </button>
@@ -173,6 +175,28 @@ export default function Home() {
           AgentStudio · 所有操作作用于当前 Agent
         </div>
       </main>
+
+      {/* JSON 导入：校验 → 存草稿 → 进入构建页 */}
+      {importOpen && (
+        <ImportDialog
+          onClose={() => setImportOpen(false)}
+          onImported={(agentId) => {
+            setImportOpen(false)
+            // 导入后刷新列表（可能命中已存在 Agent），设当前 Agent 进入构建页
+            agentsApi.list().then((list) => {
+              setAgents(list)
+              setLocal(list)
+              const a = list.find((x) => x.agent_id === agentId)
+              if (a) {
+                setCurrentAgent(a)
+                navigate('/build')
+              } else {
+                navigate('/')
+              }
+            })
+          }}
+        />
+      )}
     </div>
   )
 }

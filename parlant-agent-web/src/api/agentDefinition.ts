@@ -151,6 +151,11 @@ export interface ToolDef {
   retry?: number
   timeout_seconds?: number
   consequential?: boolean
+  /** remote 远程服务专用：通用 HTTP 工具配置（method/url/headers），实现见
+   *  parlant-agent-runtime/app/services/http_tools.py */
+  method?: string
+  url?: string
+  headers?: Record<string, string>
   editable?: boolean
 }
 
@@ -179,9 +184,12 @@ export interface RetrieverDef {
 
 export interface RelationshipDef {
   id: string
-  source: { kind: string; id: string }
+  /** 源实体引用：指南/观察 id（gdl_* 或 obs_*）、旅程 id（jny_*）或工具名；运行时按 id 解析实体 */
+  source: string
+  /** 关系类型：entailment / priority / dependency / dependency_any / disambiguation / reevaluation / overlap */
   kind: string
-  target: { kind: string; id: string }
+  /** 目标实体引用（同 source） */
+  target: string
   description?: string
 }
 

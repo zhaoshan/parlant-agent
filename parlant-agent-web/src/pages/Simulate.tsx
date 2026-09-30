@@ -323,7 +323,7 @@ export default function Simulate() {
                       {m.trace_id && (
                         <button
                           className="inline-flex cursor-pointer items-center gap-1 text-[11px] text-[var(--primary)] hover:underline"
-                          onClick={() => navigate(`/obs?trace=${encodeURIComponent(m.trace_id)}&session=${encodeURIComponent(activeId ?? '')}`)}
+                          onClick={() => navigate(`/obs?trace=${encodeURIComponent(m.trace_id ?? '')}&session=${encodeURIComponent(activeId ?? '')}`)}
                         >
                           <TraceIcon size={12} />
                           查看链路

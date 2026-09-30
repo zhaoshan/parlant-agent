@@ -1,5 +1,5 @@
 /** 简单实体表格模块：变量 / 术语表 / 预设话术 / 工具 / 检索器 —— 表格 + 行内编辑面板。 */
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { CannedResponseDef, GlossaryTermDef, RetrieverDef, ToolDef, VariableDef } from '../../api/agentDefinition'
 import { useBuild } from '../../store/build'
 import { ChipsInput, F, Select, Switch, TextInput } from './fields'
@@ -9,6 +9,34 @@ interface Col<T extends Row> {
   key: string
   header: string
   render: (r: T) => ReactNode
+}
+
+/** 变量「工具关联」下拉：定义内声明的工具 + 无 + 其它（内置/自定义，转手输）。 */
+const CUSTOM_TOOL = '__custom__'
+
+function VariableToolField({ value, onChange, toolNames }: { value: string; onChange: (v: string | undefined) => void; toolNames: string[] }) {
+  const [custom, setCustom] = useState(() => Boolean(value && !toolNames.includes(value)))
+  const isCustom = custom || (Boolean(value) && !toolNames.includes(value))
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Select
+        value={isCustom ? CUSTOM_TOOL : value || ''}
+        onChange={(v) => {
+          if (v === CUSTOM_TOOL) { setCustom(true); return }
+          setCustom(false)
+          onChange(v || undefined)
+        }}
+        options={[
+          { value: '', label: '（无，仅默认值）' },
+          ...toolNames.map((n) => ({ value: n, label: n })),
+          { value: CUSTOM_TOOL, label: '其它（内置/自定义）…' },
+        ]}
+      />
+      {isCustom && (
+        <TextInput mono value={value ?? ''} onChange={(x) => onChange(x || undefined)} placeholder="如 tavily_search（内置数据工具）" />
+      )}
+    </div>
+  )
 }
 
 function TableView<T extends Row>(props: {
@@ -133,8 +161,12 @@ export function Variables() {
             <F label="描述">
               <TextInput rows={2} value={v.description ?? ''} onChange={(x) => set({ description: x })} />
             </F>
-            <F label="工具（动态刷新）" hint="为空=静态值；绑定工具后命中时刷新">
-              <TextInput mono value={v.tool ?? ''} onChange={(x) => set({ tool: x })} placeholder="如 tavily_search" />
+            <F label="工具（动态刷新）" hint="为空=静态值；绑定工具后按 freshness 自动调工具刷新变量">
+              <VariableToolField
+                value={v.tool ?? ''}
+                onChange={(x) => set({ tool: x })}
+                toolNames={(definition?.tools?.tools ?? []).map((t) => t.name).filter(Boolean)}
+              />
             </F>
             <F label="刷新规则 freshness_rules" hint="cron 表达式">
               <TextInput mono value={v.freshness_rules ?? ''} onChange={(x) => set({ freshness_rules: x || null })} />
@@ -208,7 +240,7 @@ export function Canned() {
         const set = (patch: Partial<CannedResponseDef>) => setRows((a) => a.map((x) => (x.id === c.id ? { ...x, ...patch } : x)))
         return (
           <div className="flex flex-col gap-4">
-            <F label="模板" hint="支持 {{var}} 插值">
+            <F label="模板" hint={'支持 {{var}} 插值'}>
               <TextInput rows={4} value={c.template} onChange={(x) => set({ template: x })} />
             </F>
             <F label="标题"><TextInput value={c.title ?? ''} onChange={(x) => set({ title: x })} /></F>
@@ -254,6 +286,20 @@ export function Tools() {
               <TextInput mono value={t.name} readOnly={t.source === 'builtin'} onChange={(x) => set({ name: x })} />
             </F>
             <F label="来源"><Select value={t.source ?? 'remote'} onChange={(x) => set({ source: x as ToolDef['source'] })} options={[{ value: 'remote', label: 'remote 远程服务' }, { value: 'builtin', label: 'builtin 内置' }]} /></F>
+            {t.source === 'remote' && (
+              <>
+                <div className="rounded-lg border border-[var(--primary-line)] bg-[var(--primary-weak)] p-2.5 text-[11px] leading-relaxed text-[var(--primary)]">
+                  remote 工具 = 通用 HTTP 调用：声明 <span className="mono">method / url / headers</span>，发起请求并自动注入当前会话的 customer_id。<span className="mono">{'{customer_id}'}</span> 占位可做路径参数。
+                </div>
+                <F label="请求方法 Method"><Select value={t.method ?? 'GET'} onChange={(x) => set({ method: x })} options={[{ value: 'GET', label: 'GET' }, { value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }, { value: 'DELETE', label: 'DELETE' }]} /></F>
+                <F label="URL" hint={'支持 {param} 路径占位，如 http://127.0.0.1:8300/customer/{customer_id}'}>
+                  <TextInput mono value={t.url ?? ''} onChange={(x) => set({ url: x })} placeholder="http://127.0.0.1:8300/…" />
+                </F>
+                <F label="Headers（JSON）" hint={'固定请求头，如 {"Content-Type": "application/json"}'}>
+                  <TextInput rows={2} mono value={JSON.stringify(t.headers ?? {}, null, 2)} onChange={(x) => { try { set({ headers: JSON.parse(x) }) } catch { /* 非法 JSON 不落 */ } }} />
+                </F>
+              </>
+            )}
             <F label="描述"><TextInput rows={2} value={t.description ?? ''} onChange={(x) => set({ description: x })} /></F>
             <F label="入参 Schema（JSON）" hint="参数约束">
               <TextInput rows={6} mono value={JSON.stringify(t.input_schema ?? {}, null, 2)} onChange={(x) => { try { set({ input_schema: JSON.parse(x) }) } catch { /* 非法 JSON 不落 */ } }} />

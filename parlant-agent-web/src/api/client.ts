@@ -1,6 +1,6 @@
 /** API 客户端：所有请求走 parlant-agent-server（BFF，开发期经 vite 代理 /api → 8081）。 */
 
-import type { AgentDetail, AgentInfo, Customer, Session, SessionLedgerRow, SessionMessage, TraceObservation } from './types'
+import type { AgentDetail, AgentInfo, AgentVersionInfo, Customer, Session, SessionLedgerRow, SessionMessage, TraceObservation } from './types'
 
 const BASE = ''
 
