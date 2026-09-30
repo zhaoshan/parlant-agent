@@ -184,13 +184,13 @@ parlant-agent-server/
 
 ## 验收标准
 
-- [ ] server 独立运行，web 全部数据经 server（无直连 runtime）
-- [ ] 选不同 Agent + 不同 customer 信息，得到不同业务回复
-- [ ] customer 变量（如 `isSensitive=true`）能改变旅程走向（命中"敏感身份"分支）
-- [ ] 流式展示消息与"工具调用"过程
-- [ ] 从会话记录的**每一轮**点击"查看链路"，在 langfuse 看到该轮完整 span 树（session_turns 落库）
-- [ ] 在 server 上发布/回滚定义，runtime 热加载生效（无需重启 runtime）
-- [ ] 在 MySQL `user_sessions`（及 `session_turns`）能按 `user_id` 查到会话与轮次详情
+- [x] server 独立运行，web 全部数据经 server（无直连 runtime）——BFF 验收 3.5：建客户→建会话→发消息→SSE 透传，链路不经前端直连 runtime
+- [x] 选不同 Agent + 不同 customer 信息，得到不同业务回复——提前结清 / 智能投顾 双 agent，不同客户不同走向（实测）
+- [x] customer 变量（如 `isSensitive=true`）能改变旅程走向（09-24 变量覆盖验证命中"敏感身份"分支；09-29 智能投顾 risk_level 驱动测评分叉）
+- [x] 流式展示消息与"工具调用"过程——3.8 SSE 流式：消息气泡 + 处理中状态 + 工具调用展示
+- [x] 从会话记录的**每一轮**点击"查看链路"，在 langfuse 看到该轮完整 span 树——**3.9 以消息级 `session_messages` 取代原 session_turns**：每条 AI 消息带 trace_id，模拟对话"查看链路"跳转 langfuse 详情
+- [x] 在 server 上发布/回滚定义，runtime 热加载生效（无需重启 runtime）——BFF 验收 3.2：发布/回滚状态流转 + 回滚后会话应答
+- [x] 在 MySQL `user_sessions`（及 `session_turns`）能按 `user_id` 查到会话与轮次详情——`user_sessions` ✅ 3.4 闭环；**消息级历史由 `session_messages` 承载**（取代 session_turns）
 
 ---
 

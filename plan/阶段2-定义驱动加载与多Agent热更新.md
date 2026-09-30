@@ -88,7 +88,7 @@ GET    /internal/health                 # 引擎健康（供 server 探活/选�
 - [x] 上传一份新 `agent-definition.json` → 无需重启即可与之对话（经 `/internal/agents/{id}/load` 热加载）——实测新建 `onb-second-test`：upsert → publish → 对话正常
 - [x] 同库可并存 ≥2 个 Agent，会话按 `agent_id` 隔离——实测两 agent 各 7 条指南独立，会话绑定各自的 agent
 - [x] 修改指南后 publish，新会话立即生效；可 rollback——publish/rollback 端点全通
-- [ ] 旅程变量（`isEligible`/`orderNum`...）在会话中正确读写——**未验**（当前分支走向由工具结果驱动）
+- [x] 旅程变量（`isEligible`/`orderNum`...）在会话中正确读写（09-24 变量覆盖链路验证写成功；09-29 智能投顾变量 freshness 按 customer 读画像并驱动旅程分支——已测评跳过/未测评进测评）
 - [ ] 检索器命中知识库时，回复引用检索内容（langfuse 可见 `tool_caller`）——**未实现**（ragflow/qdrant 接入推迟）
 - [x] runtime `/internal/*` API 可用：load 幂等（重复加载不产生重复实体）、unload 干净卸载——实测连发 3 次 publish 指南数稳定 7，unload 后归 0
 
