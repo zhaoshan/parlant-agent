@@ -8,6 +8,7 @@ from app.models.chat_session import Base, SessionMessage, UserSession
 from app.models.http_schemas import (
     AgentSummary,
     CustomerCreateBody,
+    JourneyLayoutSave,
     PublishBody,
     RollbackBody,
     SessionCreateBody,
@@ -15,6 +16,7 @@ from app.models.http_schemas import (
 
 __all__ = [
     "AgentSummary",
+    "JourneyLayoutSave",
     "PublishBody",
     "RollbackBody",
     "SessionCreateBody",

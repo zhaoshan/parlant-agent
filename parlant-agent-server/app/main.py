@@ -8,7 +8,7 @@
 - 本服务不承载 Parlant 引擎；引擎在 parlant-agent-runtime（p.Server()）。
 
 lifespan：启动时建连接层（MongoConnection + MySqlConnection）→ 仓储层
-（AgentDefinitionRepository + UserSessionRepository，建索引/表）→ RuntimeClient，
+（AgentDefinitionRepository + UserSessionRepository + JourneyLayoutRepository，建索引/表）→ RuntimeClient，
 挂到 app.state；关闭时释放连接。路由经 routers/__init__ 统一注册。
 
 运行：
@@ -29,6 +29,7 @@ from app.config import get_settings
 from app.databases import MongoConnection, MySqlConnection
 from app.repository import (
     AgentDefinitionRepository,
+    JourneyLayoutRepository,
     SessionMessageRepository,
     UserSessionRepository,
 )
@@ -58,6 +59,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await session_repo.ensure_schema()
     message_repo = SessionMessageRepository(mysql)
     await message_repo.ensure_schema()
+    layout_repo = JourneyLayoutRepository(mongo)
+    await layout_repo.ensure_indexes()
 
     # 领域服务
     runtime_client = RuntimeClient(
@@ -78,6 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.agent_repository = agent_repo
     app.state.session_repository = session_repo
     app.state.message_repository = message_repo
+    app.state.journey_layout_repository = layout_repo
     app.state.runtime_client = runtime_client
     app.state.langfuse_client = langfuse_client
     app.state.agent_service = agent_service

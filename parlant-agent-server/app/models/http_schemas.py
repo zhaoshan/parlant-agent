@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +17,34 @@ class RollbackBody(BaseModel):
     """回滚请求体；version 必填。"""
 
     version: str
+
+
+AnchorSide = Literal["top", "right", "bottom", "left"]
+
+
+class EdgeAnchors(BaseModel):
+    """单条连线的两端挂载点；缺省/None = 自动（由前端按几何关系决定）。"""
+
+    from_anchor: AnchorSide | None = None
+    to_anchor: AnchorSide | None = None
+
+
+class NodePos(BaseModel):
+    """节点在流程图画布中的左上角坐标（用户拖拽后的落点）。"""
+
+    x: float
+    y: float
+
+
+class JourneyLayoutSave(BaseModel):
+    """旅程流程图布局保存请求体（纯 UI，独立于定义层）。
+
+    edges/nodes 均为**部分覆盖**：只存用户显式调整过的项，未存项回落自动布局；
+    两者都随保存整体替换（前端每次提交全量有效集，孤儿键由前端 prune）。
+    """
+
+    edges: dict[str, EdgeAnchors] = Field(default_factory=dict)
+    nodes: dict[str, NodePos] = Field(default_factory=dict)
 
 
 class AgentSummary(BaseModel):
