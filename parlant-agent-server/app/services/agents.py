@@ -47,12 +47,71 @@ class AgentDefinitionService:
             raise ValueError("定义缺少 agent.id")
         return str(agent["id"]), str(agent.get("version") or DEFAULT_VERSION)
 
+    # 定义层提供、进引擎**全局**存储的实体 id（多 Agent 必须全局唯一；@draft 实例虽由
+    # loader 加后缀隔离，published 无后缀直接进全局存储）。variable/glossary/canned
+    # 的 id 由 SDK 随机生成、tool 按名注册（同名视为复用），均不在此预检范围。
+    _ID_KIND_LABELS: dict[str, str] = {
+        "journey": "journey id (jny_*)",
+        "state": "state id (sta_*)",
+        "guideline": "guideline id (gdl_*)",
+        "observation": "observation id (obs_*)",
+    }
+
+    @classmethod
+    def _extract_definition_ids(cls, data: dict[str, Any]) -> dict[str, set[str]]:
+        """提取定义层提供的全局存储 id：journey / state / guideline / observation。"""
+        def _ids(section: str, key: str) -> set[str]:
+            items = (data.get(section) or {}).get(key) or []
+            return {str(i["id"]) for i in items if isinstance(i, dict) and i.get("id")}
+
+        def _ids_from(items: Any) -> set[str]:
+            return {str(i["id"]) for i in items or [] if isinstance(i, dict) and i.get("id")}
+
+        journeys = _ids("journeys", "journeys")
+        states: set[str] = set()
+        for j in (data.get("journeys") or {}).get("journeys") or []:
+            states |= _ids_from(j.get("states"))
+        return {
+            "journey": journeys,
+            "state": states,
+            "guideline": _ids("guidelines", "guidelines"),
+            "observation": _ids("observations", "observations"),
+        }
+
+    async def _check_cross_agent_id_conflicts(self, agent_id: str, data: dict[str, Any]) -> None:
+        """跨 Agent 定义层 id 冲突预检（导入即报错）。
+
+        journey/state/guideline/observation 进引擎全局存储，多 Agent 必须全局唯一；
+        加载器在发布/热加载时也会兜底拦截（撞号报错），这里把报错提前到导入/save。
+        """
+        mine = self._extract_definition_ids(data)
+        others = await self._repo.list_others_latest(agent_id)
+        by_kind: dict[str, list[tuple[str, str]]] = {}
+        for other in others:
+            theirs = self._extract_definition_ids(other["definition"])
+            for kind, ids in mine.items():
+                for x in sorted(ids):
+                    if x in theirs[kind]:
+                        by_kind.setdefault(kind, []).append((x, other["agent_id"]))
+        if not by_kind:
+            return
+        parts = [
+            f"{self._ID_KIND_LABELS[kind]}[{', '.join(x for x, _ in v)}] 已被 Agent '{v[0][1]}' 使用"
+            for kind, v in by_kind.items()
+        ]
+        raise ValueError(
+            "定义层 id 与现有 Agent 冲突（进引擎全局存储，须全局唯一）："
+            + "；".join(parts)
+            + "。请改用全局唯一 id（建议带 agent 专属前缀）后重新保存。"
+        )
+
     # ------------------------------------------------------------ 写
     DRAFT_VERSION = "draft"  # 草稿固定槽位（每 agent 一个）
 
     async def save(self, data: dict[str, Any], created_by: str = "api") -> dict[str, Any]:
         """保存为草稿：固定落到 `draft` 槽位，并清理其它 draft —— 保证每 agent 只有一个草稿。"""
         agent_id, _ = self._extract_identity(data)
+        await self._check_cross_agent_id_conflicts(agent_id, data)
         # 归一化：删掉所有其它 draft 版本，只留当前槽
         await self._repo.delete_versions_by_status(agent_id, STATUS_DRAFT)
         return await self._repo.save(agent_id, data, self.DRAFT_VERSION, created_by=created_by,

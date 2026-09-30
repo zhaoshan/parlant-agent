@@ -98,6 +98,21 @@ class AgentDefinitionRepository:
         cursor = self._col.find({"status": STATUS_PUBLISHED}).sort("updated_at", -1)
         return await cursor.to_list(length=500)
 
+    async def list_others_latest(self, exclude_agent_id: str) -> list[dict[str, Any]]:
+        """其它每个 agent 的最新定义（跨 Agent 定义层 id 冲突预检用）。
+
+        取每个 agent 最新更新的一份定义（不限状态），返回 `[{"agent_id", "definition"}]`。
+        """
+        pipeline = [
+            {"$match": {"agent_id": {"$ne": exclude_agent_id}}},
+            {"$sort": {"updated_at": -1}},
+            {"$group": {"_id": "$agent_id", "latest": {"$first": "$$ROOT"}}},
+        ]
+        return [
+            {"agent_id": g["_id"], "definition": g["latest"].get("definition", {})}
+            async for g in self._col.aggregate(pipeline)
+        ]
+
     async def list_versions(self, agent_id: str) -> list[dict[str, Any]]:
         cursor = self._col.find({"agent_id": agent_id}).sort("updated_at", -1)
         return [

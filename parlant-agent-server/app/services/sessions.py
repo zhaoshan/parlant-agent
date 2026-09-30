@@ -16,6 +16,8 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
 from app.boundary import RuntimeClient
 from app.repository import AgentDefinitionRepository, SessionMessageRepository, UserSessionRepository
 
@@ -47,7 +49,31 @@ class SessionService:
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
-        return await self._runtime.create_customer(name, customer_id, metadata, tags)
+        """幂等创建客户：customer_id 已存在则返回现有记录（模拟对话弹窗复用已有客户）。"""
+        if customer_id:
+            try:
+                existing = await self._runtime.list_customers()
+                hit = next((c for c in existing if c.get("id") == customer_id), None)
+                if hit:
+                    return hit
+            except Exception:  # noqa: BLE001 - 列表查询失败不阻断创建
+                pass
+        try:
+            return await self._runtime.create_customer(name, customer_id, metadata, tags)
+        except httpx.HTTPStatusError as exc:
+            # 并发/竞态兜底：恰好同时创建同 id 时，已存在则返回现有
+            if exc.response is not None and "already exists" in exc.response.text:
+                try:
+                    existing = await self._runtime.list_customers()
+                    hit = next(
+                        (c for c in existing if customer_id and c.get("id") == customer_id),
+                        None,
+                    )
+                    if hit:
+                        return hit
+                except Exception:  # noqa: BLE001
+                    pass
+            raise
 
     async def list_customers(self) -> list[dict[str, Any]]:
         return await self._runtime.list_customers()
