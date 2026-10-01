@@ -85,6 +85,12 @@ def make_http_tool(tool_def: Any) -> Any:
     description = tool_def.description or f"调用远程服务 {name}（{method} {url_template}）"
 
     props: dict[str, Any] = (tool_def.input_schema or {}).get("properties") or {}
+    # 必填参数取 input_schema.required（此前被丢弃 → 引擎 tool.required 为空 →
+    # 缺参也照发 HTTP → 远程服务 422）。合成签名时必填参数**不带默认值**
+    # （parlant：无默认值 = required，plugins.py _find_required_params）；引擎对
+    # required 缺参会 CANNOT_RUN 并回传 missing_data，模型须先问客户再调用。
+    # 控制参数 headers/request_body 恒为可选。
+    required: set[str] = set((tool_def.input_schema or {}).get("required") or [])
 
     async def _http_call(context: p.ToolContext, **kwargs: Any) -> p.ToolResult:
         return await _http_invoke(
@@ -97,14 +103,19 @@ def make_http_tool(tool_def: Any) -> Any:
             kwargs=kwargs,
         )
 
-    # 合成签名：业务参数（可选）+ 控制参数 headers/request_body（可选）
+    # 合成签名：必填业务参数（无默认值）+ 可选业务参数 + 控制参数 headers/request_body（可选）
     sig_params: list[inspect.Parameter] = [
         inspect.Parameter("context", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=p.ToolContext)
     ]
     for pname in props:
-        sig_params.append(
-            inspect.Parameter(pname, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=str)
-        )
+        if pname in required:
+            sig_params.append(
+                inspect.Parameter(pname, inspect.Parameter.KEYWORD_ONLY, annotation=str)
+            )
+        else:
+            sig_params.append(
+                inspect.Parameter(pname, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=str)
+            )
     for ctrl in ("headers", "request_body"):
         sig_params.append(
             inspect.Parameter(ctrl, inspect.Parameter.KEYWORD_ONLY, default=None, annotation=str)
