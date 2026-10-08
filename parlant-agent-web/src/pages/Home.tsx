@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { agentsApi } from '../api/client'
 import type { AgentInfo } from '../api/types'
+import CreateDialog from '../components/CreateDialog'
 import ImportDialog from '../components/ImportDialog'
 import { useApp } from '../store/app'
 import { agentLabel } from '../utils/agent'
@@ -14,6 +15,24 @@ export default function Home() {
   const [kw, setKw] = useState('')
   const [filter, setFilter] = useState<'all' | 'published' | 'draft'>('all')
   const [importOpen, setImportOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+
+  /** 创建/导入成功后：刷新列表 → 设当前 Agent → 进入构建页。 */
+  const enterAgent = (agentId: string) => {
+    setCreateOpen(false)
+    setImportOpen(false)
+    agentsApi.list().then((list) => {
+      setAgents(list)
+      setLocal(list)
+      const a = list.find((x) => x.agent_id === agentId)
+      if (a) {
+        setCurrentAgent(a)
+        navigate('/build')
+      } else {
+        navigate('/')
+      }
+    })
+  }
 
   useEffect(() => {
     agentsApi
@@ -61,7 +80,7 @@ export default function Home() {
           </button>
           <button
             className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[var(--primary)] px-3.5 text-[12.5px] font-medium text-white hover:bg-[#4338CA]"
-            onClick={() => alert('创建 Agent（阶段4 实现）')}
+            onClick={() => setCreateOpen(true)}
           >
             ＋ 创建 Agent
           </button>
@@ -153,21 +172,44 @@ export default function Home() {
               <div className="mt-3 line-clamp-2 flex-1 text-[12px] leading-relaxed text-[var(--ink-2)]">
                 {a.description?.trim() || `${agentLabel(a)} 业务说明待完善……`}
               </div>
-              <div className="mt-3.5 flex items-center gap-1.5">
-                <span className="text-[11px] text-[var(--ink-2)]">组件统计待接入</span>
+              <div className="mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                {(() => {
+                  const s = a.summary
+                  const rows = s
+                    ? [
+                        ['指南', s.guidelines],
+                        ['旅程', s.journeys],
+                        ['节点', s.states],
+                        ['变量', s.variables],
+                        ['术语', s.glossary],
+                        ['话术', s.canned_responses],
+                        ['工具', s.tools],
+                      ].filter(([, n]) => (n as number) > 0)
+                    : null
+                  return rows?.length ? (
+                    rows.map(([label, n]) => (
+                      <span key={label as string} className="inline-flex items-center gap-1 rounded-md bg-[#F1F5F9] px-1.5 py-0.5 text-[11px] text-[var(--ink-2)]">
+                        <span className="font-medium text-[var(--ink)]">{n}</span>
+                        {label}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[11px] text-[var(--muted)]">暂无组件</span>
+                  )
+                })()}
                 <span className="ml-auto cursor-pointer text-[12px] text-[var(--primary)]">进入 Agent →</span>
               </div>
             </div>
           ))}
-          {/* 创建占位 */}
+          {/* 创建 Agent（从零）：空定义 → 存草稿 → 进入构建页 */}
           <div
             className="grid cursor-pointer place-items-center rounded-[11px] border border-dashed border-[var(--line-strong)] p-4 text-center text-[var(--muted)]"
-            onClick={() => alert('创建 Agent（阶段4 实现）')}
+            onClick={() => setCreateOpen(true)}
           >
             <div>
               <div className="mb-2 text-[26px] text-[var(--line-strong)]">＋</div>
               <div className="text-[13px] font-medium text-[var(--ink-2)]">创建新的 Agent</div>
-              <div className="mt-1 text-[11.5px]">从 agent-definition.json 起步</div>
+              <div className="mt-1 text-[11.5px]">从空定义起步，进入构建页逐步配置</div>
             </div>
           </div>
         </div>
@@ -176,27 +218,9 @@ export default function Home() {
         </div>
       </main>
 
-      {/* JSON 导入：校验 → 存草稿 → 进入构建页 */}
-      {importOpen && (
-        <ImportDialog
-          onClose={() => setImportOpen(false)}
-          onImported={(agentId) => {
-            setImportOpen(false)
-            // 导入后刷新列表（可能命中已存在 Agent），设当前 Agent 进入构建页
-            agentsApi.list().then((list) => {
-              setAgents(list)
-              setLocal(list)
-              const a = list.find((x) => x.agent_id === agentId)
-              if (a) {
-                setCurrentAgent(a)
-                navigate('/build')
-              } else {
-                navigate('/')
-              }
-            })
-          }}
-        />
-      )}
+      {/* JSON 导入 / 创建：校验/生成 → 存草稿 → 进入构建页 */}
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} onCreated={enterAgent} />}
+      {createOpen && <CreateDialog onClose={() => setCreateOpen(false)} onCreated={enterAgent} />}
     </div>
   )
 }

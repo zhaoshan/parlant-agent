@@ -1,6 +1,17 @@
 /** 类型定义：与 parlant-agent-server 的 API 契约对应（阶段3）。 */
 
 // ---------- Agent ----------
+/** 组件统计（指南/旅程/状态/变量/术语/话术/工具）。详情与列表均返回；列表项可能缺（旧 server）。 */
+export interface AgentSummary {
+  guidelines: number
+  journeys: number
+  states: number
+  variables: number
+  glossary: number
+  canned_responses: number
+  tools: number
+}
+
 export interface AgentInfo {
   agent_id: string
   /** Agent 名称（定义 agent.name；旧定义可能缺失，回退 agent_id） */
@@ -12,18 +23,12 @@ export interface AgentInfo {
   latest_status: string
   loaded: boolean
   updated_at: string | null
+  /** 组件统计（列表随附；旧 server 可能缺） */
+  summary?: AgentSummary
 }
 
 export interface AgentDetail extends AgentInfo {
-  summary: {
-    guidelines: number
-    journeys: number
-    states: number
-    variables: number
-    glossary: number
-    canned_responses: number
-    tools: number
-  }
+  summary: AgentSummary
   /** 完整定义（agent-definition.json 结构，构建页草稿编辑用） */
   definition: unknown
 }
@@ -146,4 +151,17 @@ export interface TraceObservation {
   totalCost?: number | null
   promptName?: string | null
   promptVersion?: number | null
+}
+
+// ---------- 设置页 ----------
+export interface SettingsInfo {
+  /** 运行时信息（runtime `/internal/info`）；runtime 不可达为 null */
+  runtime: {
+    service: string
+    parlant_version: string
+    main_llm_model: string
+    embedding_model: string
+  } | null
+  runtime_unreachable: boolean
+  langfuse: { configured: boolean; base_url: string }
 }

@@ -108,9 +108,20 @@ class AgentDefinitionService:
     # ------------------------------------------------------------ 写
     DRAFT_VERSION = "draft"  # 草稿固定槽位（每 agent 一个）
 
-    async def save(self, data: dict[str, Any], created_by: str = "api") -> dict[str, Any]:
-        """保存为草稿：固定落到 `draft` 槽位，并清理其它 draft —— 保证每 agent 只有一个草稿。"""
+    async def save(
+        self,
+        data: dict[str, Any],
+        created_by: str = "api",
+        strict: bool = False,
+    ) -> dict[str, Any]:
+        """保存为草稿：固定落到 `draft` 槽位，并清理其它 draft —— 保证每 agent 只有一个草稿。
+
+        `strict=True`（创建 Agent 专用）：agent_id 已存在则拒绝（本端点同时被「构建保存草稿」
+        复用，故查重只在创建路径开启，避免误伤对既有 agent 的草稿更新）。
+        """
         agent_id, _ = self._extract_identity(data)
+        if strict and await self._repo.exists(agent_id):
+            raise ValueError(f"agent_id '{agent_id}' 已存在，不能重复创建")
         await self._check_cross_agent_id_conflicts(agent_id, data)
         # 归一化：删掉所有其它 draft 版本，只留当前槽
         await self._repo.delete_versions_by_status(agent_id, STATUS_DRAFT)
@@ -231,6 +242,19 @@ class AgentDefinitionService:
             }
         ok = await self._repo.delete_version(agent_id, version)
         return {"deleted": ok, "agent_id": agent_id, "version": version}
+
+    async def delete_agent(self, agent_id: str) -> dict[str, Any]:
+        """逻辑删除（设置页「删除当前 Agent」）：卸载运行时实体 + 给定义层打 `deleted_at` 墓碑。
+
+        定义**保留在 Mongo、可恢复**，只是从列表/查询中隐藏；服务端 `strict` 创建视其为不存在。
+        """
+        try:
+            await self._runtime.unload_agent(agent_id)
+        except httpx.HTTPStatusError as exc:
+            if exc.response is None or exc.response.status_code != 404:
+                raise
+        matched = await self._repo.soft_delete_agent(agent_id)
+        return {"agent_id": agent_id, "deleted": True, "soft": True, "versions_marked": matched}
 
     # ------------------------------------------------------------ 内部
     async def _latest_draft(self, agent_id: str) -> dict[str, Any] | None:

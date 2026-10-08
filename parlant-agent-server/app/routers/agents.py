@@ -23,12 +23,12 @@ async def list_agents(request: Request) -> dict[str, Any]:
 
 
 @router.post("")
-async def create_agent(request: Request) -> dict[str, Any]:
+async def create_agent(request: Request, strict: bool = False) -> dict[str, Any]:
     data = await request.json()
     try:
-        return await _svc(request).save(data, created_by="api")
+        return await _svc(request).save(data, created_by="api", strict=strict)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=409 if strict else 422, detail=str(exc)) from exc
 
 
 @router.get("/{agent_id}")
@@ -104,3 +104,9 @@ async def delete_agent(agent_id: str, request: Request) -> dict[str, Any]:
     if not ok:
         raise HTTPException(status_code=404, detail=f"agent '{agent_id}' 未加载")
     return {"agent_id": agent_id, "unloaded": True}
+
+
+@router.delete("/{agent_id}/delete")
+async def delete_agent_logical(agent_id: str, request: Request) -> dict[str, Any]:
+    """逻辑删除 Agent：卸载运行时 + 打删除墓碑，定义保留在 Mongo（可恢复）。"""
+    return await _svc(request).delete_agent(agent_id)

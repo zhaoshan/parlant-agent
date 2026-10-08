@@ -1,4 +1,30 @@
-/** Agent 显示相关的小工具（名称/头像字母），供各页面与侧栏共用。 */
+/** Agent 显示相关的小工具（名称/头像字母 + 空定义模板），供各页面与侧栏共用。 */
+
+import type { AgentDefinition } from '../api/agentDefinition'
+
+/** 新建 Agent 的空定义模板（各组件为空表，进入构建页逐步添加）。草稿版号统一为 draft（发布时 server 覆盖为正式版）。 */
+export function newAgentDefinition(id: string, name: string): AgentDefinition {
+  return {
+    agent: {
+      id,
+      name,
+      version: 'draft',
+      default_language: 'zh-CN',
+      composition_mode: 'fluid',
+      boundary: { allowed: [], prohibited: [] },
+      utterances: { greeting: [], preamble: [] },
+    },
+    guidelines: { guidelines: [] },
+    observations: { observations: [] },
+    journeys: { journeys: [] },
+    variables: { variables: [] },
+    glossary: { glossary: [] },
+    canned_responses: { responses: [] },
+    tools: { tools: [] },
+    retrievers: { retrievers: [] },
+    relationships: { relationships: [] },
+  }
+}
 
 /** Agent 显示名：优先 agent.name（去空白），缺失回退 agent_id。 */
 export function agentLabel(

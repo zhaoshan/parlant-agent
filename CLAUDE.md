@@ -86,6 +86,7 @@ Guideline=指南 · Journey=旅程 · JourneyState=状态 · Canned Response=预
 
 - **阶段0~2 完成**（环境 / runtime 最小可用 / 定义转换+多 Agent）。
 - **阶段3 进行中**：3.1-3.4 + 消息历史 + 会话生命周期/渠道 + 草稿试跑 + 旅程配置审计 + 内置工具 + 版本规则 已实现并验证；web 聊天/构建页已能跑通定义加载与模拟对话。
-- **待办**：web 配置管理完整化（阶段4）、自动仿真（阶段6）、runtime 生产化（阶段5：多 pod/HA/消息队列/版本实例隔离）、**观测插桩去 hack 化已落地**（2026-09-28：parlant 5 插桩文件已还原，功能迁 runtime `app/observability/`，待重启 runtime 验证，见 doc12 §3）、**挽留计数/工具职责已解决**（tool→fork 走通 = loader 补 REEVALUATION 关系；reason 变量默认值清空待保存；fork 结构 vs 双节点方案待业务决策，见 `docs/to-follow-up/挽留计数与工具职责.md`）。
+- **阶段4 已完成（2026-10-08）**：构建工作台 11 模块、从零创建 Agent、JSON 导入/导出、版本永远向前发布、发布前 diff + 版本历史/差异对比、设置页（运行时模型/版本 + 逻辑删除）全部落地并验收；快速回滚/渠道部署归阶段5（§5.8）。
+- **待办**：自动仿真（阶段6）、runtime 生产化（阶段5：多 pod/HA/消息队列/版本实例隔离）、**观测插桩去 hack 化已落地**（2026-09-28：parlant 5 插桩文件已还原，功能迁 runtime `app/observability/`，待重启 runtime 验证，见 doc12 §3）、**挽留计数/工具职责已解决**（tool→fork 走通 = loader 补 REEVALUATION 关系；reason 变量默认值清空待保存；fork 结构 vs 双节点方案待业务决策，见 `docs/to-follow-up/挽留计数与工具职责.md`）。
 
 > 详细进度与排障结论见 `memory/`（Claude 自动记忆，不入库）与本文件第五节的约定。

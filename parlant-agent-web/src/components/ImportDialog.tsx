@@ -3,7 +3,7 @@
  * 流程（plan 阶段4.4）：
  * 1. 粘贴 JSON 文本 或 选择 .json 文件；
  * 2. 点「导入」→ parseDefinitionJson 校验：error 阻塞并列出定位；warning 允许导入（可进构建页再修）；
- * 3. 校验通过 → POST /api/agents 存为草稿（已有同名草稿会被覆盖）→ 回调 onImported(agent_id)。
+ * 3. 校验通过 → POST /api/agents 存为草稿（已有同名草稿会被覆盖）→ 回调 onCreated(agent_id)。
  */
 import { useRef, useState } from 'react'
 import { agentsApi } from '../api/client'
@@ -12,10 +12,10 @@ import { parseDefinitionJson, type ImportIssue } from '../utils/definitionImport
 interface Props {
   onClose: () => void
   /** 导入成功（已存草稿），回调 agent_id（父组件刷新列表并进入构建页） */
-  onImported: (agentId: string) => void
+  onCreated: (agentId: string) => void
 }
 
-export default function ImportDialog({ onClose, onImported }: Props) {
+export default function ImportDialog({ onClose, onCreated }: Props) {
   const [text, setText] = useState('')
   const [fileName, setFileName] = useState('')
   const [issues, setIssues] = useState<ImportIssue[] | null>(null)
@@ -71,7 +71,7 @@ export default function ImportDialog({ onClose, onImported }: Props) {
     setErr('')
     try {
       const created = await agentsApi.create(def)
-      onImported(created.agent_id)
+      onCreated(created.agent_id)
     } catch (e) {
       setErr(String(e))
       setBusy(false)

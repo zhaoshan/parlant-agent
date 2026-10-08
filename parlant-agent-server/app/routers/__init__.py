@@ -12,6 +12,7 @@ from app.routers.agents import router as agents_router
 from app.routers.health import router as health_router
 from app.routers.internal import internal_agents_router
 from app.routers.sessions import customers_router, sessions_router
+from app.routers.settings import router as settings_router
 from app.routers.traces import traces_router
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     "sessions_router",
     "customers_router",
     "traces_router",
+    "settings_router",
     "internal_agents_router",
 ]

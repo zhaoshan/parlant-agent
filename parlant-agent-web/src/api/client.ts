@@ -1,6 +1,6 @@
 /** API 客户端：所有请求走 parlant-agent-server（BFF，开发期经 vite 代理 /api → 8081）。 */
 
-import type { AgentDetail, AgentInfo, AgentVersionInfo, Customer, Session, SessionLedgerRow, SessionMessage, TraceObservation } from './types'
+import type { AgentDetail, AgentInfo, AgentVersionInfo, Customer, Session, SessionLedgerRow, SessionMessage, SettingsInfo, TraceObservation } from './types'
 
 const BASE = ''
 
@@ -29,8 +29,8 @@ export const agentsApi = {
   /** 版本历史（不含定义体，列表用） */
   versions: (id: string) =>
     request<{ agent_id: string; versions: AgentVersionInfo[] }>(`/api/agents/${id}/versions`).then((r) => r.versions),
-  create: (definition: unknown) =>
-    request<{ agent_id: string; version: string; status: string }>('/api/agents', {
+  create: (definition: unknown, strict: boolean = false) =>
+    request<{ agent_id: string; version: string; status: string }>(`/api/agents${strict ? '?strict=1' : ''}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(definition),
@@ -47,6 +47,21 @@ export const agentsApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ version }),
     }),
+  /** 停用：仅卸载 runtime 引擎实体，版本保留 */
+  unload: (id: string) =>
+    request<{ agent_id: string; unloaded: boolean }>(`/api/agents/${id}`, { method: 'DELETE' }),
+  /** 逻辑删除：卸载运行时 + 定义层打墓碑，定义保留在 Mongo（可恢复），列表不再展示 */
+  deleteAgent: (id: string) =>
+    request<{ agent_id: string; deleted: boolean; soft: boolean; versions_marked: number }>(
+      `/api/agents/${id}/delete`,
+      { method: 'DELETE' },
+    ),
+}
+
+// ---------- 设置 ----------
+export const settingsApi = {
+  /** 平台级设置：runtime 模型/版本 + langfuse 接入状态 */
+  get: () => request<SettingsInfo>('/api/settings'),
 }
 
 // ---------- 客户 ----------

@@ -39,6 +39,7 @@ from app.routers import (
     health_router,
     internal_agents_router,
     sessions_router,
+    settings_router,
     traces_router,
 )
 from app.services import AgentDefinitionService, SessionService
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     app.include_router(sessions_router)
     app.include_router(customers_router)
     app.include_router(traces_router)
+    app.include_router(settings_router)
     app.include_router(internal_agents_router)
     return app
 

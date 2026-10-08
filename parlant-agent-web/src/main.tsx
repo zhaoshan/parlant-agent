@@ -8,6 +8,7 @@ import Build from './pages/Build'
 import Home from './pages/Home'
 import Observability from './pages/Observability'
 import Placeholder from './pages/Placeholder'
+import Settings from './pages/Settings'
 import Simulate from './pages/Simulate'
 import Versions from './pages/Versions'
 
@@ -39,7 +40,7 @@ createRoot(document.getElementById('root')!).render(
             path="/obs"
             element={<Observability />}
           />
-          <Route path="/settings" element={<Placeholder title="设置" desc="系统设置" backTo="/simulate" />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Home />} />
       </Routes>

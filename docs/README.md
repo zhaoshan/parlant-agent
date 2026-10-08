@@ -71,6 +71,7 @@ flowchart LR
 | [12-观测插桩去hack化改造.md](03-production/12-观测插桩去hack化改造.md) | 技术债：用 litellm OTel + EngineHooks 替代 parlant 源码插桩（LLM I/O + 旅程日志） |
 | [13-发布与渠道部署设计.md](03-production/13-发布与渠道部署设计.md) | 发布流程与渠道接入设计 |
 | [14-评估机制与evaluation-cache.md](03-production/14-评估机制与evaluation-cache.md) | 自研：旅程/指南评估原理、内容寻址缓存、热加载补评估、残缺评估故障模式与运维 SOP |
+| [15-guideline匹配性能优化评估.md](03-production/15-guideline匹配性能优化评估.md) | 方案评估（未开发）：单轮 23~28 次 LLM 调用 / 29.7K+ 字符 prompt 的量与根因，批大小策略 + prompt 裁剪分层方案与 A/B 验证 |
 
 ### 待跟进问题（to-follow-up）
 | 文档 | 状态 |

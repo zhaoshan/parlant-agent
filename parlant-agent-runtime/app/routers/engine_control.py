@@ -11,6 +11,8 @@ server（BFF）驱动 runtime 引擎的入口，端点：
 
 from __future__ import annotations
 
+import os
+from importlib import metadata
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
@@ -18,6 +20,13 @@ from parlant.core.context_variables import ContextVariableStore
 
 from app.models import parse_definition
 from app.services import get_runtime
+
+
+def _pkg_version(name: str) -> str:
+    try:
+        return metadata.version(name)
+    except Exception:  # noqa: BLE001 - 未安装/元数据缺失时降级
+        return "?"
 
 
 async def configure_internal_api(app: FastAPI) -> None:
@@ -101,3 +110,13 @@ async def configure_internal_api(app: FastAPI) -> None:
     @app.get("/internal/health")
     async def internal_health() -> dict[str, Any]:
         return {"status": "ok", "service": "parlant-agent-runtime"}
+
+    @app.get("/internal/info")
+    async def internal_info() -> dict[str, Any]:
+        """运行时信息（供设置页等 UI 展示模型/版本，不含敏感凭据）。"""
+        return {
+            "service": "parlant-agent-runtime",
+            "parlant_version": _pkg_version("parlant"),
+            "main_llm_model": os.getenv("LITELLM_PROVIDER_MODEL_NAME") or "未配置",
+            "embedding_model": os.getenv("LITELLM_EMBEDDING_MODEL_NAME") or "未配置",
+        }

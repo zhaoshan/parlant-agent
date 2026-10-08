@@ -26,6 +26,9 @@ STATUS_ARCHIVED = "archived"
 
 _COLLECTION = "agent_definitions"
 
+# 逻辑删除墓碑：所有对外读过滤器。deleted_at 为 null 或缺失都视为未删除（Mongo 语义）。
+_NOT_DELETED = {"deleted_at": None}
+
 
 class AgentDefinitionRepository:
     def __init__(self, mongo: MongoConnection) -> None:
@@ -44,7 +47,7 @@ class AgentDefinitionRepository:
         created_by: str = "system",
         status: str = STATUS_DRAFT,
     ) -> dict[str, Any]:
-        """保存（覆盖同版本）一个定义版本。"""
+        """保存（覆盖同版本）一个定义版本；同时清除逻辑删除墓碑（覆盖即视为恢复/重建）。"""
         now = datetime.now(timezone.utc)
         await self._col.update_one(
             {"agent_id": agent_id, "version": version},
@@ -55,6 +58,7 @@ class AgentDefinitionRepository:
                     "created_by": created_by,
                     "updated_at": now,
                 },
+                "$unset": {"deleted_at": ""},  # 覆盖保存 = 重建/恢复，去掉墓碑
                 "$setOnInsert": {"created_at": now},
             },
             upsert=True,
@@ -84,18 +88,36 @@ class AgentDefinitionRepository:
         res = await self._col.delete_many({"agent_id": agent_id, "status": status})
         return res.deleted_count
 
+    async def delete_agent_all(self, agent_id: str) -> int:
+        """物理彻底删除一个 agent 的全部版本——不可恢复（逻辑删除见 ``soft_delete_agent``）。"""
+        res = await self._col.delete_many({"agent_id": agent_id})
+        return res.deleted_count
+
+    async def soft_delete_agent(self, agent_id: str) -> int:
+        """逻辑删除一个 agent：给全部版本文档打 `deleted_at` 墓碑，定义保留在库、可恢复。"""
+        res = await self._col.update_many(
+            {"agent_id": agent_id},
+            {"$set": {"deleted_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}},
+        )
+        return res.matched_count
+
+    async def exists(self, agent_id: str) -> bool:
+        """该 agent_id 是否已有"未删除"的任意版本（create 查重用；逻辑删除后不算存在，可重建）。"""
+        query = {"agent_id": agent_id, **_NOT_DELETED}
+        return await self._col.count_documents(query, limit=1) > 0
+
     # ------------------------------------------------------------ 读
     async def get(self, agent_id: str, version: str) -> dict[str, Any] | None:
-        return await self._col.find_one({"agent_id": agent_id, "version": version})
+        return await self._col.find_one({"agent_id": agent_id, "version": version, **_NOT_DELETED})
 
     async def get_published(self, agent_id: str) -> dict[str, Any] | None:
         return await self._col.find_one(
-            {"agent_id": agent_id, "status": STATUS_PUBLISHED}, sort=[("updated_at", -1)]
+            {"agent_id": agent_id, "status": STATUS_PUBLISHED, **_NOT_DELETED}, sort=[("updated_at", -1)]
         )
 
     async def list_published(self) -> list[dict[str, Any]]:
         """全部 published 定义（供 runtime 启动拉取）。"""
-        cursor = self._col.find({"status": STATUS_PUBLISHED}).sort("updated_at", -1)
+        cursor = self._col.find({"status": STATUS_PUBLISHED, **_NOT_DELETED}).sort("updated_at", -1)
         return await cursor.to_list(length=500)
 
     async def list_others_latest(self, exclude_agent_id: str) -> list[dict[str, Any]]:
@@ -104,7 +126,7 @@ class AgentDefinitionRepository:
         取每个 agent 最新更新的一份定义（不限状态），返回 `[{"agent_id", "definition"}]`。
         """
         pipeline = [
-            {"$match": {"agent_id": {"$ne": exclude_agent_id}}},
+            {"$match": {"agent_id": {"$ne": exclude_agent_id}, **_NOT_DELETED}},
             {"$sort": {"updated_at": -1}},
             {"$group": {"_id": "$agent_id", "latest": {"$first": "$$ROOT"}}},
         ]
@@ -114,7 +136,7 @@ class AgentDefinitionRepository:
         ]
 
     async def list_versions(self, agent_id: str) -> list[dict[str, Any]]:
-        cursor = self._col.find({"agent_id": agent_id}).sort("updated_at", -1)
+        cursor = self._col.find({"agent_id": agent_id, **_NOT_DELETED}).sort("updated_at", -1)
         return [
             {
                 "version": d["version"],
@@ -133,6 +155,7 @@ class AgentDefinitionRepository:
         可能缺失，回退 agent_id）。
         """
         pipeline = [
+            {"$match": _NOT_DELETED},
             {"$sort": {"updated_at": -1}},
             {"$group": {"_id": "$agent_id", "docs": {"$push": "$$ROOT"}}},
         ]
@@ -153,6 +176,22 @@ class AgentDefinitionRepository:
                     "latest_version": latest["version"],
                     "latest_status": latest["status"],
                     "updated_at": latest.get("updated_at"),
+                    # 组件统计：对「最新定义」（草稿优先，无草稿即已发布）计数，与首页卡片/详情展示一致
+                    "summary": self._summary_counts(latest.get("definition") or {}),
                 }
             )
         return out
+
+    @staticmethod
+    def _summary_counts(d: dict[str, Any]) -> dict[str, int]:
+        """组件计数（与 services.agents 详情 summary 同语义；不含 relationship/observation/retriever）。"""
+        journeys = (d.get("journeys") or {}).get("journeys") or []
+        return {
+            "guidelines": len((d.get("guidelines") or {}).get("guidelines") or []),
+            "journeys": len(journeys),
+            "states": sum(len(j.get("states") or []) for j in journeys),
+            "variables": len((d.get("variables") or {}).get("variables") or []),
+            "glossary": len((d.get("glossary") or {}).get("glossary") or []),
+            "canned_responses": len((d.get("canned_responses") or {}).get("responses") or []),
+            "tools": len((d.get("tools") or {}).get("tools") or []),
+        }

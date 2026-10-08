@@ -889,7 +889,7 @@
             "title": "风险测评",
             "description": "调用 assess_risk 工具，引导客户自报风险等级 C1~C5。",
             "chat_state": "",
-            "tool_instruction": "向客户解释风险测评的必要性，请客户告知其风险承受等级（C1 保守 / C2 稳健 / C3 平衡 / C4 成长 / C5 进取），然后调用 assess_risk 提交测评结果。",
+            "tool_instruction": "向客户解释风险测评的必要性，引导客户自报风险承受等级（C1 保守 / C2 稳健 / C3 平衡 / C4 成长 / C5 进取）。必须先成功调用 assess_risk 工具并取得返回结果后，本步骤才算完成；客户自报等级仅是工具入参，不构成完成条件。",
             "tool_state": [
               "assess_risk"
             ],
@@ -899,7 +899,7 @@
             "transitions": [
               {
                 "transition_id": "tr_B_C",
-                "condition": "风险测评已完成，客户风险等级已确定",
+                "condition": "assess_risk 工具已成功调用并返回确定的风险等级；仅凭客户自报等级不算完成，不得推进。",
                 "to": "sta_C"
               }
             ],
