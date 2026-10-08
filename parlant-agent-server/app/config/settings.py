@@ -26,8 +26,10 @@ class Settings(BaseSettings):
     # 用户会话台账 / 未来身份（用户、登录、权限）；必需：.env 的 MYSQL_URI
     mysql_uri: str
 
-    # 跨域：阶段3 前后端分离联调放开（生产收紧为 web 来源）
-    cors_allow_origins: str = "*"
+    # 跨域（doc16 §4.3 收紧）：默认只放 web 开发来源，逗号分隔多来源，**不再默认 `*`**。
+    # dev 下 web 经 Vite 代理 /api→8081（同源），CORS 多数场景不生效；有直连 8081 的其它源
+    # （如未来网关形态）在服务端 CORS_ALLOW_ORIGINS 显式加。
+    cors_allow_origins: str = "http://localhost:5173"
 
     # 可观测（langfuse 数据读取）：由本服务代理取数，密钥不下发到浏览器。
     # 未配置时 /api/traces/* 返回 503（说明性错误），不阻断其它功能。
@@ -45,6 +47,7 @@ class Settings(BaseSettings):
     jwt_ttl_seconds: int = 28800            # 令牌有效期（E2E-1 签端点消费；认证侧校验用的是令牌内 exp）
     jwt_jwks_url: str = ""                   # AUTH_MODE=gateway（E2E-1）：IAM JWKS 端点
     internal_token: str = ""                 # runtime↔server 服务间信任（doc16 §4.4，未配置则不校验）
+    token_transport: str = "query"           # SSE 令牌传输（doc16 §4.5）：query=短时 ?access_token（dev，EventSource 兼容）；cookie 预留（生产 HttpOnly）
 
 
 @lru_cache

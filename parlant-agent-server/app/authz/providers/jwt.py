@@ -4,6 +4,8 @@
 换 RS256 + JWKS（`jwt_jwks_url`）非对称校验，仅"取密钥"一步不同。JWT claims 契约见 doc16 §3.4：
 `sub·tenantId·membershipId·roles·permissions·attrs`（iss/aud/exp 按配置校验）。
 令牌来源：M1 阶段由 dev/dev-token 等外部签发；全链路签发端点见 doc17 E2E-1。
+令牌传输（doc16 §4.5）：常规请求走 `Authorization: Bearer`；SSE（EventSource 带不了 header）
+按 `token_transport` 走 `?access_token`（query，默认）或 HttpOnly cookie（生产，预留）。
 """
 
 from __future__ import annotations
@@ -23,11 +25,12 @@ class JwtProvider:
         self.algorithm = settings.jwt_algorithm or "HS256"
         self.issuer = settings.jwt_issuer or None  # None=不校验 iss
         self.audience = settings.jwt_audience or None  # None=不校验 aud
+        self.transport = getattr(settings, "token_transport", "query") or "query"
         if not self.secret:
             raise RuntimeError("AUTH_MODE=jwt 需要配置 JWT_SECRET")
 
     async def authenticate(self, request: Request) -> AuthorizationContext:
-        token = _extract_token(request)
+        token = _extract_token(request, self.transport)
         if not token:
             raise AuthError(
                 401, "缺少令牌：请带 Authorization: Bearer <token>（SSE 可走 ?access_token）"
@@ -63,9 +66,13 @@ class JwtProvider:
         )
 
 
-def _extract_token(request: Request) -> str | None:
-    """取令牌：优先 Authorization: Bearer；SSE（EventSource 带不了 header）回退短时 query token。"""
+def _extract_token(request: Request, transport: str) -> str | None:
+    """取令牌：优先 `Authorization: Bearer`；SSE（EventSource 带不了 header）看 transport——"""
     auth = request.headers.get("Authorization") or ""
     if auth.lower().startswith("bearer "):
         return auth[7:].strip()
+    if transport == "cookie":
+        # 生产预留：登录时 Set-Cookie(HttpOnly)，SSE 同源自动携带（doc16 §4.5）
+        return request.cookies.get("access_token")
+    # 默认 query：短时 ?access_token=<jwt>（JWT 是 ASCII，符合"query 传 ASCII"既有约定）
     return request.query_params.get("access_token") or None
