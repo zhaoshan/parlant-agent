@@ -28,28 +28,48 @@ import httpx
 
 
 class RuntimeClient:
-    def __init__(self, base_url: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 30.0,
+        *,
+        internal_token: str = "",
+    ) -> None:
         self._base = base_url.rstrip("/")
         self._timeout = timeout
+        self._token = internal_token
+
+    def _client(self, timeout: float | None = None) -> httpx.AsyncClient:
+        """构造 httpx 客户端：trust_env=False 直连（服务间 127.0.0.1 不可被系统代理劫持），
+        统一带 `X-Internal-Token`（doc16 §4.4 runtime 内部鉴权；未配置则不带头——runtime
+        若启用了内部鉴权会以 401 拒绝，立即暴露两边 .env 的 INTERNAL_TOKEN 不一致）。"""
+        headers: dict[str, str] = {}
+        if self._token:
+            headers["X-Internal-Token"] = self._token
+        return httpx.AsyncClient(
+            trust_env=False,
+            timeout=timeout if timeout is not None else self._timeout,
+            headers=headers,
+        )
 
     # ------------------------------------------------------------ 健康 / 加载编排
     async def health(self) -> dict[str, Any]:
         """探活 runtime（Parlant REST /health）。"""
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.get(f"{self._base}/health")
             resp.raise_for_status()
             return resp.json()
 
     async def list_loaded(self) -> dict[str, Any]:
         """runtime 已加载 agent 列表。"""
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.get(f"{self._base}/internal/agents")
             resp.raise_for_status()
             return resp.json()
 
     async def runtime_info(self) -> dict[str, Any]:
         """运行时信息（模型/版本，供设置页展示；runtime 不可达时调用方应兜底）。"""
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.get(f"{self._base}/internal/info")
             resp.raise_for_status()
             return resp.json()
@@ -59,7 +79,7 @@ class RuntimeClient:
 
     async def load_agent(self, agent_id: str, definition: dict[str, Any]) -> dict[str, Any]:
         """把完整定义热加载进引擎（幂等）。"""
-        async with httpx.AsyncClient(trust_env=False, timeout=self.LOAD_TIMEOUT) as client:
+        async with self._client(timeout=self.LOAD_TIMEOUT) as client:
             resp = await client.post(
                 f"{self._base}/internal/agents/{agent_id}/load",
                 json={"definition": definition},
@@ -69,7 +89,7 @@ class RuntimeClient:
 
     async def unload_agent(self, agent_id: str) -> dict[str, Any]:
         """卸载引擎实体。"""
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.post(f"{self._base}/internal/agents/{agent_id}/unload")
             resp.raise_for_status()
             return resp.json()
@@ -85,7 +105,7 @@ class RuntimeClient:
         转发 runtime `POST /internal/agents/{id}/variables/override`（按**变量名**解析引擎
         id → update_value(key=customer.id)）；用于模拟对话弹窗"设置变量覆盖 journey 配置"。
         """
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.post(
                 f"{self._base}/internal/agents/{agent_id}/variables/override",
                 json={"customer_id": customer_id, "variables": variables},
@@ -104,7 +124,7 @@ class RuntimeClient:
         body: dict[str, Any] = {"customer_id": customer_id, "agent_id": agent_id}
         if title:
             body["title"] = title
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.post(
                 f"{self._base}/sessions?allow_greeting=false",
                 json=body,
@@ -113,13 +133,13 @@ class RuntimeClient:
             return resp.json()
 
     async def get_session(self, session_id: str) -> dict[str, Any]:
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.get(f"{self._base}/sessions/{session_id}")
             resp.raise_for_status()
             return resp.json()
 
     async def list_sessions(self) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.get(f"{self._base}/sessions")
             resp.raise_for_status()
             data = resp.json()
@@ -139,13 +159,13 @@ class RuntimeClient:
             body["metadata"] = metadata
         if tags:
             body["tags"] = tags
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.post(f"{self._base}/customers", json=body)
             resp.raise_for_status()
             return resp.json()
 
     async def list_customers(self) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.get(f"{self._base}/customers")
             resp.raise_for_status()
             data = resp.json()
@@ -153,7 +173,7 @@ class RuntimeClient:
 
     async def post_event(self, session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         """转发 `POST /sessions/{id}/events`（如 {kind,source,message}）。"""
-        async with httpx.AsyncClient(trust_env=False, timeout=self._timeout) as client:
+        async with self._client() as client:
             resp = await client.post(f"{self._base}/sessions/{session_id}/events", json=payload)
             resp.raise_for_status()
             return resp.json()
@@ -177,7 +197,7 @@ class RuntimeClient:
             params["source"] = source
         if kinds:
             params["kinds"] = kinds
-        async with httpx.AsyncClient(trust_env=False, timeout=None) as client:
+        async with self._client(timeout=None) as client:
             async with client.stream(
                 "GET", f"{self._base}/sessions/{session_id}/events", params=params
             ) as resp:

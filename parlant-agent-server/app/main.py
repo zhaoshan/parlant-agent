@@ -24,6 +24,8 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.authz import get_auth_provider
+from app.authz.middleware import AuthzMiddleware
 from app.boundary import LangfuseClient, RuntimeClient
 from app.config import get_settings
 from app.databases import MongoConnection, MySqlConnection
@@ -65,7 +67,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # 领域服务
     runtime_client = RuntimeClient(
-        settings.runtime_base_url, timeout=settings.runtime_timeout
+        settings.runtime_base_url,
+        timeout=settings.runtime_timeout,
+        internal_token=settings.internal_token,  # doc16 §4.4：服务间信任，双向同值
     )
     langfuse_client = LangfuseClient(
         settings.langfuse_base_url,
@@ -95,6 +99,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.service_name, version="0.1.0", lifespan=lifespan)
+
+    # 鉴权接缝（doc16 §4.1）：全局认证中间件（除 /health、/docs、/api/internal 外全量要求认证）。
+    # 注意 add_middleware 顺序：最后注册的在外层。此处先注册 Authz，后注册 CORS，
+    # 使 CORS 包在 Authz 外层——中间件返回的 401/403 也能补上跨域头。
+    auth_provider = get_auth_provider(settings.auth_mode, settings)
+    app.state.auth_provider = auth_provider
+    app.add_middleware(AuthzMiddleware, provider=auth_provider)
 
     # 阶段3 前后端分离联调放开 CORS（生产按 cors_allow_origins 收紧）
     origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]

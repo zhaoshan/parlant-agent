@@ -15,9 +15,10 @@ import os
 from importlib import metadata
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from parlant.core.context_variables import ContextVariableStore
 
+from app.config import get_settings
 from app.models import parse_definition
 from app.services import get_runtime
 
@@ -29,17 +30,33 @@ def _pkg_version(name: str) -> str:
         return "?"
 
 
+def require_internal_token(request: Request) -> None:
+    """`/internal/*` 服务间鉴权（doc16 §4.4）：校验 X-Internal-Token（与 server .env 同值）。
+
+    未配置 → 503 fail-closed（防止引擎控制面/变量覆盖被直调）；token 不符 → 401。
+    """
+    settings = get_settings()
+    expected = settings.internal_token
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="runtime 未配置 INTERNAL_TOKEN：/internal/* 已禁用以防未鉴权暴露（doc16 §4.4）",
+        )
+    if request.headers.get("X-Internal-Token") != expected:
+        raise HTTPException(status_code=401, detail="无效的 X-Internal-Token")
+
+
 async def configure_internal_api(app: FastAPI) -> None:
     # 注意：configure_api 在 p.Server.__aenter__ 内（create_api_app 阶段）被调用，
     # 彼时 init_runtime() 尚未执行；故 get_runtime() 必须延迟到请求期（此时 HTTP 服务
     # 已在 __aexit__ 启动，runtime 必然就绪）。
 
-    @app.get("/internal/agents")
+    @app.get("/internal/agents", dependencies=[Depends(require_internal_token)])
     async def list_loaded_agents() -> dict[str, Any]:
         rt = get_runtime()
         return {"agents": [{"agent_id": a, "loaded": True} for a in rt.registry.list()]}
 
-    @app.post("/internal/agents/{agent_id}/load")
+    @app.post("/internal/agents/{agent_id}/load", dependencies=[Depends(require_internal_token)])
     async def load_agent(agent_id: str, request: Request) -> dict[str, Any]:
         """接收完整定义 JSON，热加载进引擎（幂等：已存在则先卸载再重建）。
 
@@ -63,7 +80,7 @@ async def configure_internal_api(app: FastAPI) -> None:
             raise HTTPException(status_code=500, detail=f"加载失败：{exc}") from exc
         return {"agent_id": agent_id, "loaded_agent": agent.id}
 
-    @app.post("/internal/agents/{agent_id}/unload")
+    @app.post("/internal/agents/{agent_id}/unload", dependencies=[Depends(require_internal_token)])
     async def unload_agent(agent_id: str) -> dict[str, Any]:
         """卸载引擎实体（含子实体级联清理）；未加载返回 404。"""
         ok = await get_runtime().registry.unload(agent_id)
@@ -71,7 +88,7 @@ async def configure_internal_api(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail=f"agent '{agent_id}' 未加载")
         return {"agent_id": agent_id, "unloaded": True}
 
-    @app.post("/internal/agents/{agent_id}/variables/override")
+    @app.post("/internal/agents/{agent_id}/variables/override", dependencies=[Depends(require_internal_token)])
     async def override_variables(agent_id: str, request: Request) -> dict[str, Any]:
         """按**客户维度**覆盖该已加载 agent 实例的 Context Variable 值。
 
@@ -107,11 +124,11 @@ async def configure_internal_api(app: FastAPI) -> None:
             applied[str(name)] = var.id
         return {"agent_id": agent_id, "customer_id": customer_id, "applied": applied, "missing": missing}
 
-    @app.get("/internal/health")
+    @app.get("/internal/health", dependencies=[Depends(require_internal_token)])
     async def internal_health() -> dict[str, Any]:
         return {"status": "ok", "service": "parlant-agent-runtime"}
 
-    @app.get("/internal/info")
+    @app.get("/internal/info", dependencies=[Depends(require_internal_token)])
     async def internal_info() -> dict[str, Any]:
         """运行时信息（供设置页等 UI 展示模型/版本，不含敏感凭据）。"""
         return {

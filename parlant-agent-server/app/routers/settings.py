@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
+from app.authz import SETTINGS_READ, AuthorizationContext, require
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -21,7 +22,10 @@ def _runtime(request: Request) -> Any:
 
 
 @router.get("")
-async def settings(request: Request) -> dict[str, Any]:
+async def settings(
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(SETTINGS_READ)),
+) -> dict[str, Any]:
     cfg = get_settings()
     runtime: dict[str, Any] | None = None
     runtime_unreachable = False

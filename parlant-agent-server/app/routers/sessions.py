@@ -17,9 +17,16 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from app.authz import (
+    CUSTOMER_MANAGE,
+    SESSION_READ,
+    SESSION_SEND,
+    AuthorizationContext,
+    require,
+)
 from app.models import CustomerCreateBody, SessionCreateBody
 
 sessions_router = APIRouter(prefix="/api/sessions", tags=["sessions"])
@@ -40,7 +47,11 @@ def _map_http_error(exc: Exception, fallback: str = "转发失败") -> HTTPExcep
 
 
 @customers_router.post("")
-async def create_customer(body: CustomerCreateBody, request: Request) -> dict[str, Any]:
+async def create_customer(
+    body: CustomerCreateBody,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(CUSTOMER_MANAGE)),
+) -> dict[str, Any]:
     try:
         return await _svc(request).create_customer(
             body.name, body.id, body.metadata, body.tags
@@ -50,7 +61,10 @@ async def create_customer(body: CustomerCreateBody, request: Request) -> dict[st
 
 
 @customers_router.get("")
-async def list_customers(request: Request) -> dict[str, Any]:
+async def list_customers(
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(CUSTOMER_MANAGE)),
+) -> dict[str, Any]:
     try:
         customers = await _svc(request).list_customers()
     except Exception as exc:  # noqa: BLE001
@@ -59,7 +73,11 @@ async def list_customers(request: Request) -> dict[str, Any]:
 
 
 @sessions_router.post("")
-async def create_session(body: SessionCreateBody, request: Request) -> dict[str, Any]:
+async def create_session(
+    body: SessionCreateBody,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(SESSION_SEND)),
+) -> dict[str, Any]:
     """创建会话：转发 runtime + 落 MySQL 台账（source 标记渠道；mode=draft 用独立 @draft 实例试跑草稿）。"""
     if not body.customer_id:
         raise HTTPException(status_code=422, detail="创建会话需要 customer_id（可先 POST /api/customers 建客户，或用内置 guest）")
@@ -67,7 +85,8 @@ async def create_session(body: SessionCreateBody, request: Request) -> dict[str,
         return await _svc(request).create_session(
             body.agent_id,
             body.customer_id,
-            user_id=body.user_id,
+            # user_id 未由前端显式传时，回填已认证用户（doc16 §4.1）
+            user_id=body.user_id or ctx.user_id,
             title=body.title,
             source=body.source,
             mode=body.mode,
@@ -87,6 +106,7 @@ async def list_sessions(
     status: str | None = None,
     limit: int = 200,
     offset: int = 0,
+    ctx: AuthorizationContext = Depends(require(SESSION_READ)),
 ) -> dict[str, Any]:
     """会话列表（MySQL 台账，含有效性/来源渠道；条件可空，默认查全量）。
 
@@ -104,19 +124,31 @@ async def list_sessions(
 
 
 @sessions_router.post("/{session_id}/close")
-async def close_session(session_id: str, request: Request) -> dict[str, Any]:
+async def close_session(
+    session_id: str,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(SESSION_SEND)),
+) -> dict[str, Any]:
     """客户/用户主动关闭会话（台账标记正常结束）。"""
     return await _svc(request).close_session(session_id, reason="normal")
 
 
 @sessions_router.delete("/{session_id}")
-async def delete_session(session_id: str, request: Request) -> dict[str, Any]:
+async def delete_session(
+    session_id: str,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(SESSION_SEND)),
+) -> dict[str, Any]:
     """删除会话台账 + 消息历史（前端列表删除）。"""
     return await _svc(request).delete_session(session_id)
 
 
 @sessions_router.get("/{session_id}")
-async def get_session(session_id: str, request: Request) -> dict[str, Any]:
+async def get_session(
+    session_id: str,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(SESSION_READ)),
+) -> dict[str, Any]:
     try:
         return await _svc(request).get_session(session_id)
     except Exception as exc:  # noqa: BLE001
@@ -124,7 +156,11 @@ async def get_session(session_id: str, request: Request) -> dict[str, Any]:
 
 
 @sessions_router.post("/{session_id}/events")
-async def post_event(session_id: str, request: Request) -> dict[str, Any]:
+async def post_event(
+    session_id: str,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(SESSION_SEND)),
+) -> dict[str, Any]:
     """转发发消息/事件（body 原样透传 runtime，如 {kind,source,message}）。
 
     前端生成 `request_id`（uuid）随请求传入 → 注入事件 metadata（随事件留存 runtime），
@@ -154,14 +190,22 @@ async def post_event(session_id: str, request: Request) -> dict[str, Any]:
 
 
 @sessions_router.get("/{session_id}/messages")
-async def list_messages(session_id: str, request: Request) -> dict[str, Any]:
+async def list_messages(
+    session_id: str,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(SESSION_READ)),
+) -> dict[str, Any]:
     """查消息级历史（session_messages）；可选按 request_id 过滤。"""
     request_id = request.query_params.get("request_id")
     return await _svc(request).get_messages(session_id, request_id)
 
 
 @sessions_router.get("/{session_id}/events")
-async def stream_events(session_id: str, request: Request) -> StreamingResponse:
+async def stream_events(
+    session_id: str,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(SESSION_READ)),
+) -> StreamingResponse:
     """SSE 透传：订阅 runtime `sse=true` 事件流，逐块转发给 web（EventSource）。
 
     runtime 在 wait_for_data 内无新事件会自行关闭流，web 端 EventSource 自动重连；

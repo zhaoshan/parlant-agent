@@ -72,6 +72,8 @@ flowchart LR
 | [13-发布与渠道部署设计.md](03-production/13-发布与渠道部署设计.md) | 发布流程与渠道接入设计 |
 | [14-评估机制与evaluation-cache.md](03-production/14-评估机制与evaluation-cache.md) | 自研：旅程/指南评估原理、内容寻址缓存、热加载补评估、残缺评估故障模式与运维 SOP |
 | [15-guideline匹配性能优化评估.md](03-production/15-guideline匹配性能优化评估.md) | 方案评估（未开发）：单轮 23~28 次 LLM 调用 / 29.7K+ 字符 prompt 的量与根因，批大小策略 + prompt 裁剪分层方案与 A/B 验证 |
+| [16-M1-API加固与输入审核实施方案.md](03-production/16-M1-API加固与输入审核实施方案.md) | M1 实施方案：server JWT + 权限点目录 + runtime 内部 token + 输入审核 + 审计；**兼容未来统一接入层（Gateway+IAM 权限体系）的可插拔 AuthProvider 接缝设计** |
+| [17-网关接入首阶段最小实现-E2E-1范围.md](03-production/17-网关接入首阶段最小实现-E2E-1范围.md) | 跨 unify-iam-server ↔ parlant-agent 的 E2E-1 最小闭环范围：IAM 极简登录签 JWT（RS256+JWKS）+ parlant-agent gateway Provider 翻译上下文；三契约锁死；SSO/数据策略延后 E2E-2 |
 
 ### 待跟进问题（to-follow-up）
 | 文档 | 状态 |

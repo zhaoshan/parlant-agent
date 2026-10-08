@@ -51,7 +51,11 @@ async def _load_published_agents() -> list[str]:
         # （macOS 网络设置里的 HTTP 代理，httpx trust_env 默认会读），请求会被转给
         # 代理，目标不可达时代理回 502 Bad Gateway（服务健康时代理可透传 loopback，
         # 故联调时好时坏）。
-        async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
+        # 带 X-Internal-Token（doc16 §4.4 服务间信任）：server 侧 /api/internal/* 校验。
+        headers: dict[str, str] = {}
+        if settings.internal_token:
+            headers["X-Internal-Token"] = settings.internal_token
+        async with httpx.AsyncClient(timeout=10.0, trust_env=False, headers=headers) as client:
             resp = await client.get(f"{settings.server_base_url}/api/internal/published-agents")
             resp.raise_for_status()
             published = resp.json().get("agents", [])

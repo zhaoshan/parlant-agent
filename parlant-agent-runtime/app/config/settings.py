@@ -48,12 +48,18 @@ class Settings(BaseSettings):
     qdrant_url: str
 
     # 服务（p.Server 默认端口是 8800）
-    host: str = "0.0.0.0"
+    # 生产：host 默认 127.0.0.1（仅内网回环，doc16 §4.4 收紧；需跨机联调时用 env 显式指定
+    # 内网 IP）。web 从不直连 runtime，全经 server(8081) 代理，故收紧不破坏前端链路。
+    host: str = "127.0.0.1"
     port: int = 8000
 
     # 上游 BFF（parlant-agent-server，阶段3）：定义层由 server 独占写，
     # runtime 启动时经它拉取 published 定义加载（不再直连 Mongo 定义库）。
     server_base_url: str = "http://127.0.0.1:8081"
+
+    # 服务间信任（doc16 §4.4）：`/internal/*` 校验的 X-Internal-Token，须与 server .env 同值。
+    # 未配置 → 内部端点拒绝（fail-closed），防止引擎控制面裸奔。
+    internal_token: str = ""
 
     # Langfuse（官方后台仅能拿到这三项；OTEL_* 由它们派生）
     langfuse_base_url: str | None = None

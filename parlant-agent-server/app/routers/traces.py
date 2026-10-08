@@ -17,7 +17,9 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from app.authz import TRACE_READ, AuthorizationContext, require
 
 traces_router = APIRouter(prefix="/api/traces", tags=["traces"])
 
@@ -27,7 +29,11 @@ def _lf(request: Request) -> Any:
 
 
 @traces_router.get("/{trace_id}")
-async def get_trace(trace_id: str, request: Request) -> dict[str, Any]:
+async def get_trace(
+    trace_id: str,
+    request: Request,
+    ctx: AuthorizationContext = Depends(require(TRACE_READ)),
+) -> dict[str, Any]:
     """拉取一个 trace 的全部 observation（扁平数组，前端组树）。"""
     client = _lf(request)
     if not client.configured:

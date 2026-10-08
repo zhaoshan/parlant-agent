@@ -35,6 +35,17 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
 
+    # 鉴权（doc16 §4.1）：AUTH_MODE 决定 Provider（dev=开发自动管理员 / jwt=本地自签发校验 /
+    # gateway=接入 IAM，E2E-1 增量）。默认 dev，开发不减速；生产必须 jwt / gateway。
+    auth_mode: str = "dev"
+    jwt_secret: str = ""                     # AUTH_MODE=jwt：HS256 共享密钥（.env 提供）
+    jwt_issuer: str = ""                     # 空=不校验 iss；与令牌契约对齐（doc16 §3.4）
+    jwt_audience: str = "parlant-agent-server"
+    jwt_algorithm: str = "HS256"
+    jwt_ttl_seconds: int = 28800            # 令牌有效期（E2E-1 签端点消费；认证侧校验用的是令牌内 exp）
+    jwt_jwks_url: str = ""                   # AUTH_MODE=gateway（E2E-1）：IAM JWKS 端点
+    internal_token: str = ""                 # runtime↔server 服务间信任（doc16 §4.4，未配置则不校验）
+
 
 @lru_cache
 def get_settings() -> Settings:
