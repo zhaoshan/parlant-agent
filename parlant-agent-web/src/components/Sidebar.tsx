@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { agentsApi } from '../api/client'
 import { useApp } from '../store/app'
+import { useAuth } from '../store/auth'
 import { AutoIcon, BuildIcon, ChatIcon, DeployIcon, GearIcon, MarketIcon, PulseIcon } from './Icons'
 
 const NAV = [
@@ -20,6 +21,8 @@ import { agentInitial, agentLabel } from '../utils/agent'
 export default function Sidebar() {
   const navigate = useNavigate()
   const { agents, currentAgent, setAgents, setCurrentAgent } = useApp()
+  const user = useAuth((s) => s.user)
+  const clearAuth = useAuth((s) => s.clearAuth)
   const [menuOpen, setMenuOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
 
@@ -153,7 +156,18 @@ export default function Sidebar() {
 
       <div className="flex items-center gap-2 border-t border-[var(--line)] px-4 py-2.5 text-[11.5px] text-[var(--muted)]">
         <span className="h-1.5 w-1.5 rounded-full bg-[var(--success)]" />
-        server · v3.3.1 · 运行中
+        <span className="min-w-0 flex-1 truncate">server · v3.3.1</span>
+        <button
+          className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--ink-2)]"
+          onClick={() => {
+            clearAuth()
+            navigate('/login')
+          }}
+          title={`退出登录（${user?.user_name ?? '未登录'}）`}
+        >
+          <span className="max-w-24 truncate">{user?.user_name ?? '—'}</span>
+          <span>退出</span>
+        </button>
       </div>
     </aside>
   )

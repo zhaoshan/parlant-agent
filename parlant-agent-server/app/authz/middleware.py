@@ -1,6 +1,6 @@
 """全局鉴权中间件：除白名单（/health、/docs、/api/internal/*）外全量要求认证。
 
-单一入口做"认证 + 产出上下文"，避免逐路由加导致漏保护（doc16 §4.1）。授权（权限点）由
+单一入口做"认证 + 产出上下文"，避免逐路由加导致漏保护（doc09 §4.1）。授权（权限点）由
 `deps.require` 在目标路由裁决。逻辑：
 
 - 公开路径（/health、/docs、/redoc、/openapi.json）：放行，不产上下文。
@@ -24,6 +24,8 @@ from app.authz.provider import AuthProvider
 # 显式白名单（避免对 /docs、/health 误拦；/api 其余默认保护）
 PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
 INTERNAL_PREFIX = "/api/internal"
+# 免认证前缀：登录本身是取令牌的入口（此时还没有凭证），必然公开（doc09/AUTH BFF）。
+PUBLIC_PREFIXES = ("/api/auth",)
 
 
 class AuthzMiddleware:
@@ -34,6 +36,8 @@ class AuthzMiddleware:
     @staticmethod
     def _needs_auth(path: str) -> bool:
         if path in PUBLIC_PATHS or path.startswith(INTERNAL_PREFIX):
+            return False
+        if path.startswith(PUBLIC_PREFIXES):
             return False
         return path.startswith("/api/")
 

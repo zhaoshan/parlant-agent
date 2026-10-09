@@ -41,7 +41,7 @@ class RuntimeClient:
 
     def _client(self, timeout: float | None = None) -> httpx.AsyncClient:
         """构造 httpx 客户端：trust_env=False 直连（服务间 127.0.0.1 不可被系统代理劫持），
-        统一带 `X-Internal-Token`（doc16 §4.4 runtime 内部鉴权；未配置则不带头——runtime
+        统一带 `X-Internal-Token`（doc09 §4.4 runtime 内部鉴权；未配置则不带头——runtime
         若启用了内部鉴权会以 401 拒绝，立即暴露两边 .env 的 INTERNAL_TOKEN 不一致）。"""
         headers: dict[str, str] = {}
         if self._token:

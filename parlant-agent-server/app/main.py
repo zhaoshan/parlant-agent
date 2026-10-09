@@ -37,6 +37,7 @@ from app.repository import (
 )
 from app.routers import (
     agents_router,
+    auth_router,
     customers_router,
     health_router,
     internal_agents_router,
@@ -69,7 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     runtime_client = RuntimeClient(
         settings.runtime_base_url,
         timeout=settings.runtime_timeout,
-        internal_token=settings.internal_token,  # doc16 §4.4：服务间信任，双向同值
+        internal_token=settings.internal_token,  # doc09 §4.4：服务间信任，双向同值
     )
     langfuse_client = LangfuseClient(
         settings.langfuse_base_url,
@@ -100,7 +101,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.service_name, version="0.1.0", lifespan=lifespan)
 
-    # 鉴权接缝（doc16 §4.1）：全局认证中间件（除 /health、/docs、/api/internal 外全量要求认证）。
+    # 鉴权接缝（doc09 §4.1）：全局认证中间件（除 /health、/docs、/api/internal 外全量要求认证）。
     # 注意 add_middleware 顺序：最后注册的在外层。此处先注册 Authz，后注册 CORS，
     # 使 CORS 包在 Authz 外层——中间件返回的 401/403 也能补上跨域头。
     auth_provider = get_auth_provider(settings.auth_mode, settings)
@@ -118,6 +119,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router)
+    app.include_router(auth_router)
     app.include_router(agents_router)
     app.include_router(sessions_router)
     app.include_router(customers_router)

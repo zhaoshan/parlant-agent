@@ -40,7 +40,7 @@ async def create_agent(
 ) -> dict[str, Any]:
     data = await request.json()
     try:
-        # created_by 回填已认证用户（doc16 §4.1），不再硬编码 "api"
+        # created_by 回填已认证用户（doc09 §4.1），不再硬编码 "api"
         return await _svc(request).save(data, created_by=ctx.user_id, strict=strict)
     except ValueError as exc:
         raise HTTPException(status_code=409 if strict else 422, detail=str(exc)) from exc

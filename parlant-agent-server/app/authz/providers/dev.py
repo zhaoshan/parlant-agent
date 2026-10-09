@@ -1,4 +1,4 @@
-"""AUTH_MODE=dev：bootstrap 管理员上下文（含全部权限），本地开发不减速（doc16 §4.1）。
+"""AUTH_MODE=dev：bootstrap 管理员上下文（含全部权限），本地开发不减速（doc09 §4.1）。
 
 开发仍走统一中间件链路（不让 dev 绕过），只是 Provider 恒定产"已授权管理员上下文"——
 因此 require 的权限点全部命中、无 401/403；可选 `X-Dev-User-Id` 头覆盖身份，便于模拟多人。

@@ -1,6 +1,6 @@
 """/api/sessions/* 与 /api/customers/* —— 会话代理 + SSE 透传（阶段3.3）。
 
-设计（对照 docs/03-production/08-内置ChatUI与HTTP接口分析.md）：
+设计（对照 docs/06-dev-process/01-内置ChatUI与HTTP接口分析.md）：
 - 本服务不实现会话逻辑，只**代理** Parlant REST（runtime）：
     POST /api/sessions                  -> runtime POST /sessions            + 落 MySQL 台账
     GET  /api/sessions?user_id=         -> 读 MySQL 台账（按用户查列表，3.4/3.10）
@@ -85,7 +85,7 @@ async def create_session(
         return await _svc(request).create_session(
             body.agent_id,
             body.customer_id,
-            # user_id 未由前端显式传时，回填已认证用户（doc16 §4.1）
+            # user_id 未由前端显式传时，回填已认证用户（doc09 §4.1）
             user_id=body.user_id or ctx.user_id,
             title=body.title,
             source=body.source,

@@ -1,10 +1,10 @@
 """AuthProvider 协议 + 按 AUTH_MODE 选实现。
 
 认证（你是谁）与授权（你能做什么）分离：Provider 只负责认证并产出 `AuthorizationContext`；
-授权由 `deps.require` 按权限点目录裁决。三种形态（doc16 §8.1）：
+授权由 `deps.require` 按权限点目录裁决。三种形态（doc09 §8.1）：
 - `dev`：bootstrap 管理员上下文（含全部权限），本地开发不减速。
 - `jwt`：校验本地自签发 JWT（HS256 共享密钥），独立部署生产默认。
-- `gateway`：接入 IAM（RS256+JWKS 验签 + 翻译上下文），属 E2E-1 增量（doc16 §8.2 第二档）。
+- `gateway`：接入 IAM（RS256+JWKS 验签 + 翻译上下文），E2E-1（doc09 §8.2）。
 """
 
 from __future__ import annotations
@@ -32,8 +32,7 @@ def get_auth_provider(mode: str, settings: Any) -> AuthProvider:
 
         return JwtProvider(settings)
     if mode == "gateway":
-        raise NotImplementedError(
-            "AUTH_MODE=gateway（网关 Provider，RS256+JWKS 验签）属 E2E-1 增量（doc16 §8.2），尚未实现；"
-            "当前请用 dev（开发）/ jwt（生产）。"
-        )
+        from app.authz.providers.gateway import GatewayProvider
+
+        return GatewayProvider(settings)
     raise ValueError(f"未知 AUTH_MODE={mode!r}，可选 dev | jwt | gateway")

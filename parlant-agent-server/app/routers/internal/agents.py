@@ -4,7 +4,7 @@ server↔runtime 内部通信专用子包：当前只有「拉取全部 publishe
 （runtime 启动时调用）；未来 runtime→server 的其他内部能力在同一子包扩展。
 
 端点 prefix 统一 `/api/internal`，与对外路由（`app/routers/` 顶层 agents/sessions/...）隔离。
-鉴权：此处是**服务间信任**（doc16 §4.4），校验 `X-Internal-Token`（与 runtime 侧同值），
+鉴权：此处是**服务间信任**（doc09 §4.4），校验 `X-Internal-Token`（与 runtime 侧同值），
 不面向前端用户；server 顶层 AuthzMiddleware 已放行 `/api/internal/*`（不混入用户鉴权）。
 """
 
@@ -26,7 +26,7 @@ def require_internal_token(request: Request) -> None:
     if not expected:
         raise HTTPException(
             status_code=503,
-            detail="server 未配置 INTERNAL_TOKEN：内部端点在未配置鉴权下已禁用（doc16 §4.4）",
+            detail="server 未配置 INTERNAL_TOKEN：内部端点在未配置鉴权下已禁用（doc09 §4.4）",
         )
     if request.headers.get("X-Internal-Token") != expected:
         raise HTTPException(status_code=401, detail="无效的 X-Internal-Token")

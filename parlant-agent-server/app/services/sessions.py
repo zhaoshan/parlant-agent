@@ -1,6 +1,6 @@
 """会话代理服务（阶段3.3+）：转发 Parlant 会话 REST + SSE 透传 + MySQL 台账/消息历史写入。
 
-定位（对照 plan 阶段3 任务 3.3/3.4/3.9 与 docs/03-production/08/09）：
+定位（对照 plan 阶段3 任务 3.3/3.4/3.9 与 docs/06-dev-process/01/09）：
 - runtime（Parlant REST）是**会话/事件事实源**；本服务只是代理 + 用户维度索引。
 - 创建会话：转发 `POST /sessions`，成功后往 MySQL `user_sessions` 落一行（3.4 闭环）。
 - **消息级历史（session_messages，3.9 增强）**：用户提问记一条、Agent 每次回复记一条；

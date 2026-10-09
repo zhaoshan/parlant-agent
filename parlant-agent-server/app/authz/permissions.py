@@ -1,6 +1,6 @@
 """权限点目录：路由 → 所需 permission code（授权裁决的唯一依据）。
 
-与 unify-iam-server 的 `gateway_permission` **同套 code**（doc16 §3.3 / doc17 §4.2）。
+与 unify-iam-server 的 `gateway_permission` **同套 code**（doc09 §3.3 / doc10 §4.2）。
 IAM 侧为权威；本文件声明 + 未来启动校验比对（IAM `gateway_permission` 预置缺失则告警）。
 """
 

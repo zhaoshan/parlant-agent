@@ -3,7 +3,7 @@
 字段对齐《Gateway 权限体系架构设计》§8.2 的 AuthorizationContext：
 `userId / tenantId / membershipId / roles / permissions / attrs(dataAttributes)`。
 
-业务代码只读它、不读任何硬编码身份（ci doc16 §2.2）；未来网关直接产出同构上下文。
+业务代码只读它、不读任何硬编码身份（ci doc09 §2.2）；未来网关直接产出同构上下文。
 """
 
 from __future__ import annotations

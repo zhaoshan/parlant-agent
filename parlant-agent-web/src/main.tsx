@@ -4,8 +4,10 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './index.css'
 import AppLayout from './components/AppLayout'
+import RequireAuth from './components/RequireAuth'
 import Build from './pages/Build'
 import Home from './pages/Home'
+import Login from './pages/Login'
 import Observability from './pages/Observability'
 import Placeholder from './pages/Placeholder'
 import Settings from './pages/Settings'
@@ -16,10 +18,25 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
-        {/* Agent 首页：无侧栏 */}
-        <Route path="/" element={<Home />} />
+        {/* 登录：无侧栏、免认证 */}
+        <Route path="/login" element={<Login />} />
+        {/* Agent 首页：无侧栏，需登录 */}
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <Home />
+            </RequireAuth>
+          }
+        />
         {/* 带侧栏 */}
-        <Route element={<AppLayout />}>
+        <Route
+          element={
+            <RequireAuth>
+              <AppLayout />
+            </RequireAuth>
+          }
+        >
           <Route path="/build" element={<Build />} />
           <Route path="/build/versions" element={<Versions />} />
           {/* 预留功能：技能市场（阶段7 技能平台）、渠道部署（阶段5 §5.8） */}
@@ -42,7 +59,15 @@ createRoot(document.getElementById('root')!).render(
           />
           <Route path="/settings" element={<Settings />} />
         </Route>
-        <Route path="*" element={<Home />} />
+        {/* 未知路径兜底：需登录，未登录回登录页 */}
+        <Route
+          path="*"
+          element={
+            <RequireAuth>
+              <Home />
+            </RequireAuth>
+          }
+        />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

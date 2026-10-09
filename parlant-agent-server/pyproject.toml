@@ -12,7 +12,8 @@ dependencies = [
     "motor>=3.5",          # MongoDB async driver（定义层 agent_definitions，本服务独占写）
     "sqlalchemy[asyncio]>=2.0",
     "aiomysql>=0.3.2",
-    "PyJWT>=2.8",          # AUTH_MODE=jwt：HS256 令牌校验（doc16 §4.1）
+    "PyJWT>=2.8",          # AUTH_MODE=jwt：HS256 令牌校验（doc09 §4.1）
+    "cryptography>=42",    # PyJWT RS256 验签（AUTH_MODE=gateway，JWKS 公钥，E2E-1）
 ]
 
 [project.optional-dependencies]
@@ -36,7 +37,7 @@ target-version = "py311"
 [tool.ruff.lint.per-file-ignores]
 # B008 豁免 FastAPI 依赖注入惯用法 `ctx: AuthorizationContext = Depends(require("agent:publish"))`：
 # `require(...)` 在**导入期**求值一次返回依赖工厂（非每请求调用），是安全不可变调用；
-# 这是同步 doc16 §4.2 / doc17 §4 的显式写法，逐处加 noqa 反而噪音。仅豁免路由层，不弱化其它检查。
+# 这是同步 doc09 §4.2 / doc10 §4 的显式写法，逐处加 noqa 反而噪音。仅豁免路由层，不弱化其它检查。
 "app/routers/*.py" = ["B008"]
 
 [tool.pytest.ini_options]

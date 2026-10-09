@@ -1,11 +1,28 @@
 /** API 客户端：所有请求走 parlant-agent-server（BFF，开发期经 vite 代理 /api → 8081）。 */
 
 import type { AgentDetail, AgentInfo, AgentVersionInfo, Customer, Session, SessionLedgerRow, SessionMessage, SettingsInfo, TraceObservation } from './types'
+import { useAuth } from '../store/auth'
+import type { AuthUser } from '../store/auth'
 
 const BASE = ''
 
+/** 当前令牌（zustand 非 hook 读取：供 fetch/EventSource 随时取，不触发重渲染）。 */
+export function getToken(): string | null {
+  return useAuth.getState().token
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const resp = await fetch(`${BASE}${path}`, init)
+  const headers = new Headers(init?.headers)
+  const token = getToken()
+  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const resp = await fetch(`${BASE}${path}`, { ...init, headers })
+  if (resp.status === 401) {
+    // 令牌缺失/过期：清凭证并回登录页（登录端点自身除外，避免"登录未认证→再跳登录"死循环）
+    if (!path.startsWith('/api/auth/')) {
+      useAuth.getState().clearAuth()
+      if (window.location.pathname !== '/login') window.location.href = '/login'
+    }
+  }
   if (!resp.ok) {
     let detail = `${resp.status} ${resp.statusText}`
     try {
@@ -17,6 +34,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(detail)
   }
   return resp.json() as Promise<T>
+}
+
+// ---------- 认证（P1 网关接入）：server 代理 IAM 签令牌 ----------
+export const authApi = {
+  login: (username: string, password: string) =>
+    request<{ access_token: string; token_type?: string; expires_in?: number; user?: AuthUser }>('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    }),
 }
 
 // ---------- Agent ----------
@@ -124,8 +151,14 @@ export const sessionsApi = {
     request<{ session_id: string; messages: SessionMessage[]; count: number }>(
       `/api/sessions/${sessionId}/messages${requestId ? `?request_id=${encodeURIComponent(requestId)}` : ''}`,
     ),
-  /** SSE 事件流（EventSource 消费，min_offset 续传） */
-  eventsUrl: (sessionId: string, minOffset = 0) => `/api/sessions/${sessionId}/events?min_offset=${minOffset}`,
+  /** SSE 事件流（EventSource 消费，min_offset 续传）；EventSource 带不了 header，
+   *  令牌按 server 的 TOKEN_TRANSPORT=query 走 `?access_token`（doc09 §4.5）。 */
+  eventsUrl: (sessionId: string, minOffset = 0) => {
+    let url = `/api/sessions/${sessionId}/events?min_offset=${minOffset}`
+    const token = getToken()
+    if (token) url += `&access_token=${encodeURIComponent(token)}`
+    return url
+  },
 }
 
 // ---------- 旅程流程图布局（连线挂载点 + 节点坐标，纯 UI，独立于定义层） ----------

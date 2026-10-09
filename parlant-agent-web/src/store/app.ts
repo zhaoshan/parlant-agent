@@ -13,13 +13,15 @@ interface AppState {
   currentUser: CurrentUser
   setAgents: (agents: AgentInfo[]) => void
   setCurrentAgent: (agent: AgentInfo | null) => void
+  setCurrentUser: (user: CurrentUser) => void
 }
 
 export const useApp = create<AppState>((set) => ({
   agents: [],
-  // MVP 演示用户；后续接入登录后替换
+  // 默认演示用户；登录后由 RequireAuth 从 auth.user 同步（P1）
   currentAgent: null,
   currentUser: { user_id: 'u-demo', user_name: '演示用户' },
   setAgents: (agents) => set({ agents }),
   setCurrentAgent: (currentAgent) => set({ currentAgent }),
+  setCurrentUser: (currentUser) => set({ currentUser }),
 }))

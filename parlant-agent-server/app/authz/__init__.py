@@ -1,9 +1,9 @@
-"""authz：鉴权接缝（doc16 §3.1）。认证（AuthProvider）与授权（permissions + require）分离。
+"""authz：鉴权接缝（doc09 §3.1）。认证（AuthProvider）与授权（permissions + require）分离。
 
 - 认证：`AuthzMiddleware` + `AuthProvider` 按 `AUTH_MODE` 选实现（dev / jwt；未来 gateway E2E-1）。
   中间件全局装配 `AuthorizationContext`（写入 scope["state"]，端点经 request.state 读取）。
 - 授权：`require(code)` 路由依赖读到上下文后按权限点目录裁决，缺权限点 → 403。
-- 未来接入 IAM（doc17 E2E-1）：只换 `gateway` Provider，路由代码零改动 —— 这是"接缝成立"的证明。
+- 未来接入 IAM（doc10 E2E-1）：只换 `gateway` Provider，路由代码零改动 —— 这是"接缝成立"的证明。
 
 权限点目录（permissions.py）与 unify-iam-server `gateway_permission` 同套 code；
 IAM 侧为权威，本文件声明，未来启动校验比对。
