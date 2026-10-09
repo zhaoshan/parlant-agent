@@ -1,5 +1,5 @@
 """EngineHooks 观测装配（替代 parlant 源码的 journey.progress / engine.reeval /
-engine.not_prepared 与 process 根 span I/O 插桩，见 docs/03-production/12 §2.2）。
+engine.not_prepared 与 process 根 span I/O 插桩，见 docs/06-dev-process/05 §2.2）。
 
 - ``journey_progress_log``：挂 `on_preparation_iteration_end`——每次准备迭代结束
   打印 `[parlant-agent] journey.progress`（session + 迭代号 + 各旅程 **index:名称** 路径）。
@@ -10,7 +10,7 @@ engine.not_prepared 与 process 根 span I/O 插桩，见 docs/03-production/12 
   回调在 process span 作用域内运行）→ 设 `langfuse.observation.input/output`，
   替代原 engine.py:209 的 process 根 span I/O 插桩。
 
-诊断信息派生（doc12 §2.4）：REEVALUATION 是否生效看路径是否推进；executed_tools 看
+诊断信息派生（doc05 §2.4）：REEVALUATION 是否生效看路径是否推进；executed_tools 看
 `state.iterations[-1].executed_tools`；tool 节点命中看路径尾节点 type（runtime 有 definition）。
 """
 

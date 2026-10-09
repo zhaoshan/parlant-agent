@@ -1,10 +1,10 @@
-"""litellm monkey-patch：DeepSeek 关 reasoning + gen_ai.chat span（见 doc12 §3）。
+"""litellm monkey-patch：DeepSeek 关 reasoning + gen_ai.chat span（见 doc05 §3）。
 
 一次 patch `LiteLLMSchematicGenerator.do_generate`，合并两项：
 1. **DeepSeek 关 reasoning**（原 parlant `litellm_service.py` 必需 hack）：推理 token 耗尽
    max_tokens → content 空 → 引擎按 `{}` 处理 → schema 校验失败（表象=评估/匹配全挂）。
    注入 `hints["reasoning"]={"enabled": False}`（已把 `reasoning` 加进 supported_litellm_params）；
-2. **gen_ai.chat span**（原 parlant `generation.py` 插桩，doc12 §2.1 的回退方案）：用 parlant
+2. **gen_ai.chat span**（原 parlant `generation.py` 插桩，doc05 §2.1 的回退方案）：用 parlant
    tracer 开 `gen_ai.chat` span 记录 prompt/completion/usage → langfuse OTLP 摄入渲染为
    generation。**弃用 litellm OTel 回调的原因**：litellm 1.102 OpenTelemetry 集成在 async
    acompletion 下于 span 结束后仍调 set_attribute/set_status → 属性被丢弃 + stdout 刷屏

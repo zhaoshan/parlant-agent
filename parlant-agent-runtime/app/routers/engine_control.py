@@ -31,7 +31,7 @@ def _pkg_version(name: str) -> str:
 
 
 def require_internal_token(request: Request) -> None:
-    """`/internal/*` 服务间鉴权（doc16 §4.4）：校验 X-Internal-Token（与 server .env 同值）。
+    """`/internal/*` 服务间鉴权（doc09 §4.4）：校验 X-Internal-Token（与 server .env 同值）。
 
     未配置 → 503 fail-closed（防止引擎控制面/变量覆盖被直调）；token 不符 → 401。
     """
@@ -40,7 +40,7 @@ def require_internal_token(request: Request) -> None:
     if not expected:
         raise HTTPException(
             status_code=503,
-            detail="runtime 未配置 INTERNAL_TOKEN：/internal/* 已禁用以防未鉴权暴露（doc16 §4.4）",
+            detail="runtime 未配置 INTERNAL_TOKEN：/internal/* 已禁用以防未鉴权暴露（doc09 §4.4）",
         )
     if request.headers.get("X-Internal-Token") != expected:
         raise HTTPException(status_code=401, detail="无效的 X-Internal-Token")

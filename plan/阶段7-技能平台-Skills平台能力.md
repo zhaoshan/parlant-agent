@@ -3,7 +3,7 @@
 > 2026-09-30 新增。定位：把「手工搭 Agent + 排障」沉淀为可复用、可调度、可配置模型的
 > **平台级技能**。源于智能投顾 Demo 的实战积累（journey priority 须≥最高指南、
 > strict 兜底坑、跨 Agent id 全局唯一、relationship 悬空引用、变量 freshness、
-> 分叉条件表就绪等，见 docs/03-production/11 与各排障文档）。
+> 分叉条件表就绪等，见 docs/06-dev-process/04 与各排障文档）。
 > 概念澄清：v3.3.1 无原生 skill 概念（schema `skills` 键为空壳、源码未消费），
 > 本阶段是**全新平台概念**；与 Claude Code skills（.claude/skills）互不相关。
 

@@ -3,7 +3,7 @@
 > 状态：**已知，方案评估完成，暂不实施**（2026-10-01）。属 Issue B 的根治手段；
 > 当前先以 ① 定义加固（软约束，已落 demo 草稿）压低误判率。本文档给引擎守卫（硬约束）
 > 的设计与插入点，方案定了再做。
-> 配套：`docs/03-production/15-guideline匹配性能优化评估.md`（另一条优化线，勿混）；
+> 配套：`docs/06-dev-process/08-guideline匹配性能优化评估.md`（另一条优化线，勿混）；
 > 原 Issue B 分析见 memory `http-tools-required-and-journey-tool-node-footgun.md`。
 
 ---

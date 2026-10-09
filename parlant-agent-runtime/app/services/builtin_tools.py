@@ -9,7 +9,7 @@ loader 按名字 resolve_tool 成 ToolRef 挂到节点/指南上，SDK 收集 To
 三个工具：
 - journey_node_counter：旅程节点访问计数器（按 (agent_id, session_id) 内存计数）。
 - variable_update：声明式会话变量写入——把调用方声明的变量值写进 ContextVariableStore
-  （key=customer_id 客户级覆盖，优先级最高，见 docs/03-production/09）。
+  （key=customer_id 客户级覆盖，优先级最高，见 docs/06-dev-process/02）。
 - tavily_search：联网搜索（需 TAVILY_API_KEY；未配置返回提示不抛错）。
 """
 
@@ -83,7 +83,7 @@ async def variable_update(
     """Extract declared session variables and apply their updates.
 
     真实写入：把声明变量写进 ContextVariableStore（key=customer_id，客户级覆盖，
-    引擎按 `customer.id > agent:<id> > 全局` 优先级读取，见 docs/03-production/09）。
+    引擎按 `customer.id > agent:<id> > 全局` 优先级读取，见 docs/06-dev-process/02）。
     variable_selectors 为 JSON 字符串（@p.tool 仅支持 list 泛型），形如
     `{"varName": {"value": ...}}`；未带 value 或变量未声明则不写（回执状态）。
     依赖 runtime 容器注入（set_runtime_services）。

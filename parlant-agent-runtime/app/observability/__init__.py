@@ -1,4 +1,4 @@
-"""观测与模型适配集中层（doc12 落地：parlant 源码插桩全部移出，集中到 runtime）。
+"""观测与模型适配集中层（doc05 落地：parlant 源码插桩全部移出，集中到 runtime）。
 
 子包分工：
 - ``otel/``    litellm OpenTelemetry 回调（**弃用**：async 下 ended-span 刷屏，见 otel/__init__）

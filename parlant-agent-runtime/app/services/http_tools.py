@@ -15,7 +15,7 @@ URL/body 映射规则（远程工具声明即按此写）：
 1. url 模板可含 `{param}` 占位：调用时用同名的业务参数填充（如
    `http://127.0.0.1:8300/customer/{customer_id}`）；
 2. 未用 `{param}` 占位且不在 body 里的 `customer_id`：自动从 context 注入
-   （引擎的会话维度客户，随客户身份切换，见 docs/03-production/09）；
+   （引擎的会话维度客户，随客户身份切换，见 docs/06-dev-process/02）；
 3. GET：剩余业务参数拼成 query string；POST：剩余业务参数进 JSON body；
 4. 固定 header 来自声明 `headers`，动态 header 经 `headers` 参数（JSON 字符串）
    传入并合并（LLM 可按需覆盖）；

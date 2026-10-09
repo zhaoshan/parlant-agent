@@ -211,8 +211,8 @@ class AuthorizationContext:
 
 ## 8. 与 E2E-1 的融合开发范围（2026-10-08 补充）
 
-> 与 `docs/03-production/17-网关接入首阶段最小实现-E2E-1范围.md` 融合后的 parlant-agent 侧范围。
-> 结论：doc17 的「parlant-agent 最小交付」列几乎全部 ⊂ 本 doc 的 M1；唯一新增 = `gateway` Provider + web 端令牌接入。
+> 与 `docs/06-dev-process/10-网关接入首阶段最小实现-E2E-1范围.md` 融合后的 parlant-agent 侧范围。
+> 结论：doc10 的「parlant-agent 最小交付」列几乎全部 ⊂ 本 doc 的 M1；唯一新增 = `gateway` Provider + web 端令牌接入。
 
 ### 8.1 Provider 最终形态：dev / jwt / gateway 三档
 
@@ -243,3 +243,19 @@ class AuthorizationContext:
 
 - 阶段A 不需 IAM，做完即满足本 doc §6 验收 1–6。
 - 阶段B 与 IAM 侧（建表→seed→签 token→JWKS）并行；联调时 parlant-agent 只把 `AUTH_MODE` 切 `gateway` + 指向 IAM，**路由代码零改动**——验证接缝成立。
+
+### 8.4 P1 落地记录（2026-10-08，阶段B parlant-agent 侧）
+
+P1 = 「gateway Provider + web 登录/令牌接入」，已在 parlant-agent 仓库落地并本地验证，**不依赖 IAM 就绪**（用自签名密钥自证）。
+
+| 件 | 实现 |
+|---|---|
+| `gateway.py` Provider | `app/authz/providers/gateway.py`：`PyJWKClient` 拉 IAM JWKS，按 kid 取公钥 RS256 验签（kid 缓存 + `lifespan=300` 自动回源），`iss/aud/exp` 按配置校验；同步验签包到 `asyncio.to_thread`（拉取属网络 I/O）。与 `jwt` 共用 `token.py`（`extract_token` + `claims_to_context`），`jwt.py` 已去重收敛 |
+| Provider 组装 | `provider.py get_auth_provider`：`AUTH_MODE=gateway` → `GatewayProvider`（原 NotImplementedError 移除） |
+| 登录 BFF | `app/routers/auth.py` `POST /api/auth/login`：转发 `{username,password}` 到 `iam_token_url` 换 access_token；`IAM_TOKEN_URL` 未配置 → 503（与 langfuse 未配置同口径）；`trust_env=False` 防 macOS 代理劫持 |
+| 白名单 | 中间件 `PUBLIC_PREFIXES=("/api/auth",)`：登录端点免认证（取令牌前本无凭证） |
+| 配置 | `settings.py` 增 `iam_token_url`；`.env.example` 补 `IAM_TOKEN_URL` 与 gateway 注解；`pyproject` 增 `cryptography`（RS256 运行时依赖） |
+| Web 登录/令牌 | `store/auth.ts`（zustand 持久化 token+user，`decodeJwtPayload`/`userFromToken`）；`client.ts` 自动带 `Authorization: Bearer`、SSE `?access_token`、401→跳登录、`authApi.login`；`pages/Login.tsx`（IAM 账号表单 + 粘贴令牌，UI 缺口 fallback）；`RequireAuth` 守卫 + `/login` 路由；侧栏底部「用户名 · 退出」 |
+| 当前用户 | 登录后 `RequireAuth` 把 auth.user 同步进工作台 `currentUser`（session 落库 user_id 用），替代原 `u-demo` 硬编码 |
+
+**本地自证（IAM 未就绪）**：`test/gateway_dev_jwks.py` 为自签名迷你 IAM——`GET /.well-known/jwks.json` + `POST /api/v1/auth/token`（固定测试账号 `admin/admin123`），密钥落 `~/.parlant-dev/rsa/private.pem`。已验证：有效 Bearer→200（claims 翻译正确）、SSE `?access_token`→200、篡改→401（signature verification failed）、无令牌→401；真实 `create_app` 切 gateway 后 `/api/auth/login` 具免认证白名单且登录即拿到令牌。P2 在 unify-iam-server 就绪后，把 `JWT_JWKS_URL`/`IAM_TOKEN_URL` 指向真实 IAM 即可，**zero 代码改动**。

@@ -85,7 +85,7 @@ parlant-agent-server/
 > - `GET /api/sessions?user_id=` 台账可查；`GET /api/sessions/{id}` 合并 runtime+台账。
 > - 错误透传：不存在会话发消息 → runtime 404 原样映射。
 > - 坑：`last_message_at` 曾用 `datetime.now()`（本地时区）与 created_at（UTC）不一致，已改 `datetime.now(timezone.utc)` 统一 UTC。
-> - 参考文档：docs/03-production/08-内置ChatUI与HTTP接口分析.md（/chat 交互逻辑 + 框架 REST 清单）。
+> - 参考文档：docs/06-dev-process/01-内置ChatUI与HTTP接口分析.md（/chat 交互逻辑 + 框架 REST 清单）。
 
 ### 3.4 用户会话台账（MySQL，✅ 闭环完成 2026-09-23 v2：渠道 + 生命周期）
 > 诉求（2026-09-22）：**能在 MySQL 里按用户查到会话详情**。
@@ -154,7 +154,7 @@ parlant-agent-server/
 
 ### 3.11 自动仿真（**已归并阶段6**，本阶段仅留设计稿）
 - 自动仿真（仿真脚本 + 执行记录，含客户级 Variables 覆盖机制）整体移入 **`plan/阶段6-自动仿真与对话测试.md`**。
-- 本阶段交付：设计稿 `design/agentstudio/06-auto-simulation.html`（去掉 AgentId 配置，作用域=当前 Agent）+ 本文档 §1 的机制说明（docs/03-production/09）。
+- 本阶段交付：设计稿 `design/agentstudio/06-auto-simulation.html`（去掉 AgentId 配置，作用域=当前 Agent）+ 本文档 §1 的机制说明（docs/06-dev-process/02）。
 - web 侧 `/auto-sim` 路由留占位，阶段6 实现。
 
 ### 3.12 草稿试跑 + 会话 Agent 版本隔离（✅ 2026-09-23 实现）
@@ -165,7 +165,7 @@ parlant-agent-server/
   **草稿会话关闭/删除后无剩余活跃时立即卸载 @draft 实例**。
 - **发布策略**：阶段3 接受 Parlant 原生（发布=热加载覆盖，线上进行中会话切新版本，无会话级版本快照）；
   **阶段5 增强**：published 也用版本实例 + 会话创建时版本快照，发布加载新实例、旧实例服务旧会话直至自然结束。
-- 设计文档：`docs/03-production/10-草稿试跑与会话版本隔离.md`；前端模拟对话「新对话」含 草稿/线上 二选一 + 列表草稿徽标。
+- 设计文档：`docs/06-dev-process/03-草稿试跑与会话版本隔离.md`；前端模拟对话「新对话」含 草稿/线上 二选一 + 列表草稿徽标。
 
 ---
 

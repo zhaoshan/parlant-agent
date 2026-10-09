@@ -1,7 +1,7 @@
 # Parlant 技术参考手册
 
 > Parlant v3.3.1 官方文档中文翻译 + 源码执行链路分析 + 实战开发计划。
-> 本目录是**技术参考入口**：概念与语法 → 生产实践 → 源码链路；实施路径见同级 `plan/` 目录。
+> 本目录是**技术参考入口**：概念与语法 → 生产实践 → 开发过程记录 → 源码链路；实施路径见同级 `plan/` 目录。
 
 ---
 
@@ -18,15 +18,17 @@ flowchart LR
     A["① 快速上手<br/>01-quickstart"] --> B["② 核心概念<br/>02-concepts"]
     B --> C["③ 执行链路<br/>04-execution-chain"]
     B --> D["④ 生产实践<br/>03-production"]
-    C --> E["⑤ 实战开发<br/>../plan"]
-    D --> E
+    D --> F["⑤ 开发过程记录<br/>06-dev-process"]
+    C --> E["⑥ 实战开发<br/>../plan"]
+    F --> E
 ```
 
 1. **快速上手**：装起来、跑通示例、理解设计动机。
 2. **核心概念**：会话、Agent、客户 + 8 大上下文工程组件（这是重点，逐篇精读）。
 3. **执行链路**：回到源码，理解"一次提问如何被处理"（把概念串成线）。
 4. **生产实践**：上线要考虑的审核、转交、加固、观测、扩展。
-5. **实战开发**：按 `plan/` 分阶段搭 admin / server / web。
+5. **开发过程记录**：自研落地结论（内置 ChatUI 分析、Variables 覆盖、草稿试跑、工具指南、去 hack 化、评估机制、M1 加固、E2E-1 网关）。
+6. **实战开发**：按 `plan/` 分阶段搭 admin / server / web。
 
 ---
 
@@ -64,16 +66,20 @@ flowchart LR
 | [05-官方前端参考.md](03-production/05-官方前端参考.md) | parlant-chat-react 与自定义前端 |
 | [06-可观测性.md](03-production/06-可观测性.md) | OpenTelemetry 接入（traces/metrics/logs） |
 | [07-FastAPI扩展.md](03-production/07-FastAPI扩展.md) | configure_api / configure_container 扩展 |
-| [08-内置ChatUI与HTTP接口分析.md](03-production/08-内置ChatUI与HTTP接口分析.md) | 自研：/chat 交互逻辑 + 框架 REST 接口清单 + BFF 代理映射 |
-| [09-客户信息与Variables覆盖机制.md](03-production/09-客户信息与Variables覆盖机制.md) | 自研：客户信息用法 + 变量解析优先级 + 客户级覆盖 Agent 默认（自动仿真依据） |
-| [10-草稿试跑与会话版本隔离.md](03-production/10-草稿试跑与会话版本隔离.md) | 自研：草稿 @draft 独立实例试跑、session 记录 Agent 版本/状态、不影响线上 |
-| [11-工具实现与配置指南.md](03-production/11-工具实现与配置指南.md) | 自研：内置工具（journey_node_counter / variable_update / tavily_search）+ remote 自定义 HTTP 工具、变量 freshness 联动、前端配置、踩坑清单 |
-| [12-观测插桩去hack化改造.md](03-production/12-观测插桩去hack化改造.md) | 技术债：用 litellm OTel + EngineHooks 替代 parlant 源码插桩（LLM I/O + 旅程日志） |
-| [13-发布与渠道部署设计.md](03-production/13-发布与渠道部署设计.md) | 发布流程与渠道接入设计 |
-| [14-评估机制与evaluation-cache.md](03-production/14-评估机制与evaluation-cache.md) | 自研：旅程/指南评估原理、内容寻址缓存、热加载补评估、残缺评估故障模式与运维 SOP |
-| [15-guideline匹配性能优化评估.md](03-production/15-guideline匹配性能优化评估.md) | 方案评估（未开发）：单轮 23~28 次 LLM 调用 / 29.7K+ 字符 prompt 的量与根因，批大小策略 + prompt 裁剪分层方案与 A/B 验证 |
-| [16-M1-API加固与输入审核实施方案.md](03-production/16-M1-API加固与输入审核实施方案.md) | M1 实施方案：server JWT + 权限点目录 + runtime 内部 token + 输入审核 + 审计；**兼容未来统一接入层（Gateway+IAM 权限体系）的可插拔 AuthProvider 接缝设计** |
-| [17-网关接入首阶段最小实现-E2E-1范围.md](03-production/17-网关接入首阶段最小实现-E2E-1范围.md) | 跨 unify-iam-server ↔ parlant-agent 的 E2E-1 最小闭环范围：IAM 极简登录签 JWT（RS256+JWKS）+ parlant-agent gateway Provider 翻译上下文；三契约锁死；SSO/数据策略延后 E2E-2 |
+
+### 06-dev-process 开发过程记录（自研落地 / 技术债 / 实施方案）
+| 文档 | 内容 |
+|---|---|
+| [01-内置ChatUI与HTTP接口分析.md](06-dev-process/01-内置ChatUI与HTTP接口分析.md) | 自研：/chat 交互逻辑 + 框架 REST 接口清单 + BFF 代理映射 |
+| [02-客户信息与Variables覆盖机制.md](06-dev-process/02-客户信息与Variables覆盖机制.md) | 自研：客户信息用法 + 变量解析优先级 + 客户级覆盖 Agent 默认（自动仿真依据） |
+| [03-草稿试跑与会话版本隔离.md](06-dev-process/03-草稿试跑与会话版本隔离.md) | 自研：草稿 @draft 独立实例试跑、session 记录 Agent 版本/状态、不影响线上 |
+| [04-工具实现与配置指南.md](06-dev-process/04-工具实现与配置指南.md) | 自研：内置工具（journey_node_counter / variable_update / tavily_search）+ remote 自定义 HTTP 工具、变量 freshness 联动、前端配置、踩坑清单 |
+| [05-观测插桩去hack化改造.md](06-dev-process/05-观测插桩去hack化改造.md) | 技术债：用 litellm OTel + EngineHooks 替代 parlant 源码插桩（LLM I/O + 旅程日志） |
+| [06-发布与渠道部署设计.md](06-dev-process/06-发布与渠道部署设计.md) | 发布流程与渠道接入设计 |
+| [07-评估机制与evaluation-cache.md](06-dev-process/07-评估机制与evaluation-cache.md) | 自研：旅程/指南评估原理、内容寻址缓存、热加载补评估、残缺评估故障模式与运维 SOP |
+| [08-guideline匹配性能优化评估.md](06-dev-process/08-guideline匹配性能优化评估.md) | 方案评估（未开发）：单轮 23~28 次 LLM 调用 / 29.7K+ 字符 prompt 的量与根因，批大小策略 + prompt 裁剪分层方案与 A/B 验证 |
+| [09-M1-API加固与输入审核实施方案.md](06-dev-process/09-M1-API加固与输入审核实施方案.md) | M1 实施方案：server JWT + 权限点目录 + runtime 内部 token + 输入审核 + 审计；**兼容未来统一接入层（Gateway+IAM 权限体系）的可插拔 AuthProvider 接缝设计** |
+| [10-网关接入首阶段最小实现-E2E-1范围.md](06-dev-process/10-网关接入首阶段最小实现-E2E-1范围.md) | 跨 unify-iam-server ↔ parlant-agent 的 E2E-1 最小闭环范围：IAM 极简登录签 JWT（RS256+JWKS）+ parlant-agent gateway Provider 翻译上下文；三契约锁死；SSO/数据策略延后 E2E-2 |
 
 ### 待跟进问题（to-follow-up）
 | 文档 | 状态 |
