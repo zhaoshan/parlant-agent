@@ -12,7 +12,7 @@ dependencies = [
     "motor>=3.5",          # MongoDB async driver（定义层 agent_definitions，本服务独占写）
     "sqlalchemy[asyncio]>=2.0",
     "aiomysql>=0.3.2",
-    "PyJWT>=2.8",          # AUTH_MODE=jwt：HS256 令牌校验（doc09 §4.1）
+    "PyJWT>=2.8",          # AUTH_MODE=gateway：RS256 验签 + PyJWKClient 拉 IAM JWKS（doc09 §4.1）
     "cryptography>=42",    # PyJWT RS256 验签（AUTH_MODE=gateway，JWKS 公钥，E2E-1）
 ]
 

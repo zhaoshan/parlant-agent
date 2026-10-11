@@ -7,6 +7,8 @@
 
 > **落地记录（2026-10-09）**：§4 已实现——server `settings.iam_sso_base`、`GET /api/auth/sso/authorize`（302 IAM）、受保护 `GET /api/me`（新 me_router，`Depends(get_context)`，不入 /api/auth 免认证前缀）；web Login.tsx 三入口（企业 SSO / 本地表单 / 粘贴）+ SSO 回跳收 token（setAuth + replaceState 清 query + navigate）+ 个人按钮默认隐藏（`VITE_IAM_SHOW_PERSONAL=1` 开启）；index.html `no-referrer`。进程内已验：sso/authorize→302 IAM、/api/me 无 token→401、带 IAM token→200（u-1000/tenant-org-a/9 权限）。server 重启后生效。
 
+> **2026-10-11 更新（实施改为形态 B：登录页收归 IAM hub）**：perlant web **删除登录页**（Login.tsx/RequireAuth 移除），改由 `AuthBootstrap` 启动分流——`GET /api/auth/mode`（server 公开）返回模式：`dev` → 写占位会话**免登录直进**；`gateway` → 跳 IAM hub（`settings.iam_hub_base`，如 unify-iam-web :5174）登录，hub 回跳 `?access_token` 由 AuthBootstrap 收。**jwt 模式（HS256 本地自签发）随登录页收归而淘汰**（无入口发/取 token），`JwtProvider`/`JWT_SECRET`/`token_generator.py` 一并删除，AUTH_MODE 收敛为 `dev | gateway` 两档（doc09 §8.1）。`GET /api/auth/mode` 与 hub 回跳收 token 已落地；本节下方 §4.4 三入口登录页为收敛前的方案记录。
+
 ---
 
 ## 1. 目标（一句话）
@@ -21,7 +23,7 @@
 | `GatewayProvider` | `app/authz/providers/gateway.py`：PyJWKClient 拉 IAM JWKS、RS256 验签、iss/aud/exp 按配置校验 |
 | 鉴权中间件 | `AuthzMiddleware` 全局保护 `/api/*`；白名单 `/health`、`/docs`、`/api/auth` |
 | 登录 BFF | `routers/auth.py` `POST /api/auth/login` 转发 IAM `/api/v1/auth/token`（本地密码） |
-| Web 登录页 | `Login.tsx`：IAM 账号表单（username/password）+ 粘贴已有令牌；`store/auth.ts` `setAuth`/`userFromToken` 已就绪 |
+| Web 登录页 | ~~`Login.tsx` 三入口~~（2026-10-11 已删）；`AuthBootstrap` 启动分流（dev 直进 / gateway 跳 IAM hub）+ `store/auth.ts` `setAuth`/`userFromToken`/`devSession` |
 | SSE 令牌 | `?access_token=` query 传输（gateway 兼容） |
 
 ### 2.2 unify-iam-server 已有

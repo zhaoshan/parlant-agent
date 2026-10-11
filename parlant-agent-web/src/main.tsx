@@ -1,13 +1,12 @@
-/** AgentStudio 路由：首页无侧栏；其余在 AppLayout（浅色侧栏）内。 */
+/** AgentStudio 路由：AuthBootstrap 启动分流（dev 直进 / gateway 跳 IAM hub），首页无侧栏；其余在 AppLayout 内。 */
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './index.css'
 import AppLayout from './components/AppLayout'
-import RequireAuth from './components/RequireAuth'
+import AuthBootstrap from './components/AuthBootstrap'
 import Build from './pages/Build'
 import Home from './pages/Home'
-import Login from './pages/Login'
 import Observability from './pages/Observability'
 import Placeholder from './pages/Placeholder'
 import Settings from './pages/Settings'
@@ -17,58 +16,38 @@ import Versions from './pages/Versions'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <Routes>
-        {/* 登录：无侧栏、免认证 */}
-        <Route path="/login" element={<Login />} />
-        {/* Agent 首页：无侧栏，需登录 */}
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
-              <Home />
-            </RequireAuth>
-          }
-        />
-        {/* 带侧栏 */}
-        <Route
-          element={
-            <RequireAuth>
-              <AppLayout />
-            </RequireAuth>
-          }
-        >
-          <Route path="/build" element={<Build />} />
-          <Route path="/build/versions" element={<Versions />} />
-          {/* 预留功能：技能市场（阶段7 技能平台）、渠道部署（阶段5 §5.8） */}
-          <Route
-            path="/skills"
-            element={<Placeholder title="技能市场" desc="技能插件的安装、配置与编排（预留 · 规划见 plan/阶段7-技能平台）" backTo="/build" backLabel="返回 Agent 构建" />}
-          />
-          <Route
-            path="/deploy"
-            element={<Placeholder title="渠道部署" desc="版本 × 渠道部署矩阵：钉钉 / 飞书 / web widget 接入（预留 · 规划见 plan/阶段5 §5.8）" backTo="/build" backLabel="返回 Agent 构建" />}
-          />
-          <Route path="/simulate" element={<Simulate />} />
-          <Route
-            path="/auto-sim"
-            element={<Placeholder title="自动仿真" desc="仿真脚本 + 执行记录（阶段6）" backTo="/simulate" />}
-          />
-          <Route
-            path="/obs"
-            element={<Observability />}
-          />
-          <Route path="/settings" element={<Settings />} />
-        </Route>
-        {/* 未知路径兜底：需登录，未登录回登录页 */}
-        <Route
-          path="*"
-          element={
-            <RequireAuth>
-              <Home />
-            </RequireAuth>
-          }
-        />
-      </Routes>
+      <AuthBootstrap>
+        <Routes>
+          {/* Agent 首页：无侧栏 */}
+          <Route path="/" element={<Home />} />
+          {/* 带侧栏 */}
+          <Route element={<AppLayout />}>
+            <Route path="/build" element={<Build />} />
+            <Route path="/build/versions" element={<Versions />} />
+            {/* 预留功能：技能市场（阶段7 技能平台）、渠道部署（阶段5 §5.8） */}
+            <Route
+              path="/skills"
+              element={<Placeholder title="技能市场" desc="技能插件的安装、配置与编排（预留 · 规划见 plan/阶段7-技能平台）" backTo="/build" backLabel="返回 Agent 构建" />}
+            />
+            <Route
+              path="/deploy"
+              element={<Placeholder title="渠道部署" desc="版本 × 渠道部署矩阵：钉钉 / 飞书 / web widget 接入（预留 · 规划见 plan/阶段5 §5.8）" backTo="/build" backLabel="返回 Agent 构建" />}
+            />
+            <Route path="/simulate" element={<Simulate />} />
+            <Route
+              path="/auto-sim"
+              element={<Placeholder title="自动仿真" desc="仿真脚本 + 执行记录（阶段6）" backTo="/simulate" />}
+            />
+            <Route
+              path="/obs"
+              element={<Observability />}
+            />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+          {/* 未知路径兜底（IAM hub 回跳落在 '/' 由 AuthBootstrap 收 token） */}
+          <Route path="*" element={<Home />} />
+        </Routes>
+      </AuthBootstrap>
     </BrowserRouter>
   </StrictMode>,
 )

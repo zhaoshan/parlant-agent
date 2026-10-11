@@ -17,10 +17,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const resp = await fetch(`${BASE}${path}`, { ...init, headers })
   if (resp.status === 401) {
-    // 令牌缺失/过期：清凭证并回登录页（登录端点自身除外，避免"登录未认证→再跳登录"死循环）
+    // 令牌缺失/过期：清凭证并整页回 `/`——AuthBootstrap 会重新分流（dev→直进 / gateway→跳 IAM hub），
+    // 登录端点自身豁免（避免"未认证→再跳登录"死循环）。
     if (!path.startsWith('/api/auth/')) {
       useAuth.getState().clearAuth()
-      if (window.location.pathname !== '/login') window.location.href = '/login'
+      if (window.location.pathname !== '/') window.location.href = '/'
     }
   }
   if (!resp.ok) {
@@ -36,7 +37,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return resp.json() as Promise<T>
 }
 
-// ---------- 认证（P1 网关接入）：server 代理 IAM 签令牌 ----------
+// ---------- 认证（doc11 形态 B）：server 代理 IAM 签令牌 + 启动分流 ----------
 export const authApi = {
   login: (username: string, password: string) =>
     request<{ access_token: string; token_type?: string; expires_in?: number; user?: AuthUser }>('/api/auth/login', {
@@ -44,6 +45,8 @@ export const authApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     }),
+  /** 当前认证模式（公开，AuthBootstrap 启动分流用）：dev→直进 / gateway→跳 hub */
+  mode: () => request<{ mode: string; dev_user?: string; hub_base?: string }>('/api/auth/mode'),
 }
 
 // ---------- Agent ----------

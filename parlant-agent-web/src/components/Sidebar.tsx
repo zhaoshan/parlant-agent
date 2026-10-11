@@ -161,7 +161,8 @@ export default function Sidebar() {
           className="flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-[var(--muted)] hover:bg-[var(--bg)] hover:text-[var(--ink-2)]"
           onClick={() => {
             clearAuth()
-            navigate('/login')
+            // 整页回 '/'：AuthBootstrap 重新分流（dev→直进 / gateway→跳 IAM hub 重新登录）
+            window.location.href = '/'
           }}
           title={`退出登录（${user?.user_name ?? '未登录'}）`}
         >

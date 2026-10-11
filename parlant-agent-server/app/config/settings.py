@@ -37,17 +37,16 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
 
-    # 鉴权（doc09 §4.1）：AUTH_MODE 决定 Provider（dev=开发自动管理员 / jwt=本地自签发校验 /
-    # gateway=接入 IAM，E2E-1 增量）。默认 dev，开发不减速；生产必须 jwt / gateway。
+    # 鉴权（doc09 §4.1，2026-10-11 收敛为两档）：AUTH_MODE 决定 Provider——
+    # dev=开发自动管理员（免令牌全权限，本地不减速，严禁生产）；gateway=接入 IAM（RS256+JWKS，唯一生产形态）。
+    # jwt（HS256 本地自签发）已随"登录页收归 IAM hub"淘汰（无入口可发/取 token），见 doc11 §3 形态 B。
     auth_mode: str = "dev"
-    jwt_secret: str = ""                     # AUTH_MODE=jwt：HS256 共享密钥（.env 提供）
     jwt_issuer: str = ""                     # 空=不校验 iss；与令牌契约对齐（doc09 §3.4）
     jwt_audience: str = "parlant-agent-server"
-    jwt_algorithm: str = "HS256"
-    jwt_ttl_seconds: int = 28800            # 令牌有效期（E2E-1 签端点消费；认证侧校验用的是令牌内 exp）
     jwt_jwks_url: str = ""                   # AUTH_MODE=gateway（E2E-1）：IAM JWKS 端点
-    iam_token_url: str = ""                  # 登录 BFF 的 IAM 令牌端点（POST {username,password}→access_token），空=登录页仅开发粘贴令牌
-    iam_sso_base: str = ""                   # SSO authorize 的 IAM 基址（doc11 §4.1：web 经本服务 302 跳转，不直写 IAM URL）；空=登录页不显示 SSO 入口
+    iam_token_url: str = ""                  # 登录 BFF 的 IAM 令牌端点（POST {username,password}→access_token）；空=本地账号入口 503
+    iam_sso_base: str = ""                   # SSO authorize 的 IAM 后端基址（doc11 §4.1）；gateway 下企业 SSO 经此 302
+    iam_hub_base: str = ""                   # IAM 统一登录 hub（unify-iam-web）基址；gateway 模式 web 无 token 时跳它登录，回跳带 ?access_token；dev 不用
     internal_token: str = ""                 # runtime↔server 服务间信任（doc09 §4.4，未配置则不校验）
     token_transport: str = "query"           # SSE 令牌传输（doc09 §4.5）：query=短时 ?access_token（dev，EventSource 兼容）；cookie 预留（生产 HttpOnly）
 

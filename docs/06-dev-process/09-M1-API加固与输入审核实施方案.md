@@ -58,9 +58,9 @@ parlant-agent-server/app/authz/
 ├── context.py        # AuthorizationContext dataclass（对齐 IAM §8.2）
 ├── provider.py       # AuthProvider 协议 + 按 AUTH_MODE 选实现
 ├── providers/
-│   ├── dev.py        # AUTH_MODE=dev：自签发 JWT / bootstrap 上下文（开发用）
-│   └── jwt.py        # AUTH_MODE=jwt：校验本地自签发 JWT（M1 默认生产形态）
-│                      # （未来 gateway.py：校验网关 JWKS + 信任内网上下文头）
+│   ├── dev.py        # AUTH_MODE=dev：bootstrap 管理员上下文（本地开发不减速，严禁生产）
+│   └── gateway.py    # AUTH_MODE=gateway：校验 IAM JWKS（RS256+JWKS，唯一生产形态）
+│                      # （jwt.py/HS256 本地自签发已于 2026-10-11 淘汰，见 §8.1 注）
 ├── permissions.py    # 权限点目录：路由 → 所需 permission code
 └── deps.py           # get_context() / require(code) 两个 FastAPI 依赖
 ```
@@ -114,11 +114,12 @@ class AuthorizationContext:
 ### 4.1 [5.3-a] server 鉴权骨架（authz 包 + 依赖注入）
 
 - 新增 `app/authz/*`（§3 结构）。
-- `settings.py` 增：`auth_mode: str = "dev"`、`jwt_secret` / `jwt_issuer` / `jwt_audience`、
-  `jwt_algorithm="HS256"`、`jwt_ttl_seconds=28800`、`internal_token`、`cors_allow_origins`（已有）收默认值。
+- `settings.py` 增：`auth_mode: str = "dev"`、`jwt_issuer` / `jwt_audience`、
+  `jwt_jwks_url`、`iam_token_url` / `iam_sso_base` / `iam_hub_base`、`internal_token`、`cors_allow_origins`（已有）收默认值。
+  （`jwt_secret`/`jwt_algorithm`/`jwt_ttl_seconds` 为 jwt 模式专属，2026-10-11 随 jwt 淘汰一并移除。）
 - `main.py`：初始化 Provider（按 `auth_mode`），挂到 `app.state.auth_provider`；
-  新增 `get_context` 全局依赖（缺省 401）——除 `/health`、`/docs`、dev 模式白名单外全量启用。
-- dev 模式：`AUTH_MODE=dev` 时自动装配 bootstrap 管理员上下文（含全部权限），**不拖慢开发**；生产必为 `jwt`。
+  新增 `get_context` 全局依赖（缺省 401）——除 `/health`、`/docs`、`/api/auth` 白名单外全量启用。
+- dev 模式：`AUTH_MODE=dev` 时自动装配 bootstrap 管理员上下文（含全部权限），**不拖慢开发**；生产必为 `gateway`。
 - 生效：`context.user_id` 回填 `AgentDefinitionService.save(created_by=context.user_id)`、session `user_id`（替换 query 传参的"演示用户"兜底）。
 
 ### 4.2 [5.3-b] 路由权限点接入
@@ -186,12 +187,12 @@ class AuthorizationContext:
 
 ## 6. 验收清单
 
-- [ ] `AUTH_MODE=jwt` 下，无令牌访问 `/api/agents` 401；有令牌无权限点 403；有权限 200
-- [ ] `AUTH_MODE=dev` 下全功能可用（开发不减速）
-- [ ] runtime `/internal/*` 无 `X-Internal-Token` 返回 401；server→runtime 带 token 正常热加载/SSE
-- [ ] runtime host 收紧后 8000/8818 不再对公网监听（`lsof -iTCP` 验证）
-- [ ] CORS 收紧：非白名单来源被拦；web(5173) 正常
-- [ ] SSE 事件流经 query token（dev）正常透传
+- [x] `AUTH_MODE=gateway` 下，无令牌访问 `/api/agents` 401；有令牌无权限点 403；有权限 200（P1 已验证；jwt 模式 2026-10-11 已淘汰，不再验收）
+- [x] `AUTH_MODE=dev` 下全功能可用（开发不减速）
+- [x] runtime `/internal/*` 无 `X-Internal-Token` 返回 401；server→runtime 带 token 正常热加载/SSE
+- [x] runtime host 收紧后 8000/8818 不再对公网监听（`lsof -iTCP` 验证）
+- [x] CORS 收紧：非白名单来源被拦；web(5173) 正常
+- [x] SSE 事件流经 query token（dev）正常透传
 - [ ] 违规输入命中 Guard → 预设拒绝话术 + 不转发引擎 + `audit_log` 落一条
 - [ ] `save/publish/delete` 各落一条审计（含 userId）
 - [ ] 全链路回归：首页创建→构建→发布→试跑→观测 带鉴权后仍通
@@ -214,15 +215,14 @@ class AuthorizationContext:
 > 与 `docs/06-dev-process/10-网关接入首阶段最小实现-E2E-1范围.md` 融合后的 parlant-agent 侧范围。
 > 结论：doc10 的「parlant-agent 最小交付」列几乎全部 ⊂ 本 doc 的 M1；唯一新增 = `gateway` Provider + web 端令牌接入。
 
-### 8.1 Provider 最终形态：dev / jwt / gateway 三档
+### 8.1 Provider 最终形态：dev / gateway 两档（jwt 已淘汰）
 
 | Provider | 密钥来源 | 用途 | 启用 |
 |---|---|---|---|
-| `dev` | 无（自动装配 bootstrap 管理员上下文） | 本地开发不减速 | `AUTH_MODE=dev`（默认） |
-| `jwt` | HS256 共享密钥 `jwt_secret`（本地自签发） | 未接 IAM 的独立部署生产默认 | `AUTH_MODE=jwt` |
-| `gateway` | RS256 + JWKS（`jwt_jwks_url` 指向 IAM） | 接入 IAM 后生产形态（E2E-1） | `AUTH_MODE=gateway` |
+| `dev` | 无（自动装配 bootstrap 管理员上下文） | 本地开发不减速（严禁生产） | `AUTH_MODE=dev`（默认） |
+| `gateway` | RS256 + JWKS（`jwt_jwks_url` 指向 IAM） | 接入 IAM 后的生产形态（E2E-1，唯一生产） | `AUTH_MODE=gateway` |
 
-> `jwt` 与 `gateway` 是同一验签器、不同密钥源；`gateway.py` 只需在 `jwt.py` 基础上换"取密钥"一步（JWKS 拉取 + kid 缓存）。三种形态共享 `permissions.py` 目录与 `AuthorizationContext`。
+> **2026-10-11 收敛**：`jwt`（HS256 本地自签发）已淘汰——doc11 形态 B 将登录页收归 IAM hub，web 不再有发/取 token 的入口，jwt 模式的"独立部署无 IAM"场景随之失去承载；`JwtProvider`/`jwt_secret`/`token_generator.py` 一并删除。两档共享 `permissions.py` 目录与 `AuthorizationContext`；`gateway.py` 直接读 IAM JWKS（PyJWKClient 按 kid 取公钥 RS256 验签）。
 
 ### 8.2 parlant-agent 侧推荐范围（三档优先级）
 

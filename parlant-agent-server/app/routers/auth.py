@@ -99,6 +99,21 @@ async def sso_authorize(tenant_id: str = "tenant-org-a") -> RedirectResponse:
     return RedirectResponse(url, status_code=302)
 
 
+@router.get("/mode")
+async def auth_mode() -> dict[str, Any]:
+    """公开返回当前认证模式（`/api/auth` 白名单内免认证，web 启动分流用，doc11 形态 B）。
+
+    - `dev`：web **免登录直进**——写入占位会话（`dev_user`，server 不校验），不走登录页。
+    - `gateway`：web 无 token 时跳 `hub_base`（IAM 统一登录 hub）登录，hub 回跳带 `?access_token`。
+    """
+    settings = get_settings()
+    return {
+        "mode": settings.auth_mode,
+        "dev_user": "dev-admin",  # dev 模式 web 注入的占位身份（与 DevProvider 一致）
+        "hub_base": settings.iam_hub_base or "",
+    }
+
+
 @me_router.get("/me")
 async def me(ctx: AuthorizationContext = Depends(get_context)) -> dict[str, Any]:
     """当前登录用户信息（claims 翻译后返回）。

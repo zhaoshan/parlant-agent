@@ -1,8 +1,7 @@
-/** 认证状态：令牌 + 当前用户。token 持久化 localStorage，刷新不丢（P1 网关接入）。
+/** 认证状态：令牌 + 当前用户。token 持久化 localStorage，刷新不丢（doc11 形态 B）。
 
-- 令牌来源：登录页「IAM 账号登录」（server `POST /api/auth/login` 代理到 IAM）或
-  「粘贴已有令牌」（开发/联调，token_generator.py 或 IAM 后台签发）。
-- 用 `persist` 中间件：`parlant-auth` 键。登出清空并回登录页（401 拦截在 api/client request）。
+- 令牌来源：IAM hub 登录回跳（`?access_token`，AuthBootstrap 收）或 dev 占位会话（devSession）。
+- 用 `persist` 中间件：`parlant-auth` 键。登出清空并整页回 '/'（AuthBootstrap 重新分流）。
  */
 
 import { create } from 'zustand'
@@ -63,4 +62,10 @@ export function userFromToken(token: string): AuthUser | null {
     roles: (claims.roles as string[] | undefined) ?? [],
     permissions: (claims.permissions as string[] | undefined) ?? [],
   }
+}
+
+/** dev 模式（AUTH_MODE=dev）占位会话：server 不校验（DevProvider 全放行），
+ *  写占位 token+身份让前端管线（Bearer/SSE ?access_token）直进，不跳登录（doc11 形态 B）。 */
+export function devSession() {
+  useAuth.getState().setAuth('dev', { user_id: 'dev-admin', user_name: 'dev-admin' })
 }

@@ -1,8 +1,7 @@
 """JWT 令牌解析共用件：从请求取令牌 + claims → AuthorizationContext。
 
-`dev`（bootstrap 上下文）不经过这里；`jwt` 与 `gateway` 两个 Provider 共用——二者是
-**同一验签器、不同密钥源**（doc09 §8.1 / §8.2：HS256 共享密钥 vs RS256+JWKS 公钥），
-提取令牌的传输约定与 claims 到上下文的映射完全一致，抽出来避免两份重复实现。
+`dev`（bootstrap 上下文）不经过这里；`gateway` Provider 消费（RS256+JWKS 验签后映射 claims）。
+提取令牌的传输约定与 claims 到上下文的映射在此统一（doc09 §3.4 / doc10 §3.1）。
 """
 
 from __future__ import annotations
