@@ -41,6 +41,7 @@ from app.routers import (
     customers_router,
     health_router,
     internal_agents_router,
+    me_router,
     sessions_router,
     settings_router,
     traces_router,
@@ -120,6 +121,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(me_router)
     app.include_router(agents_router)
     app.include_router(sessions_router)
     app.include_router(customers_router)

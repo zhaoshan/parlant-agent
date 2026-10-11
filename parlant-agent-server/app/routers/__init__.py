@@ -9,6 +9,7 @@
 """
 
 from app.routers.agents import router as agents_router
+from app.routers.auth import me_router
 from app.routers.auth import router as auth_router
 from app.routers.health import router as health_router
 from app.routers.internal import internal_agents_router
@@ -22,6 +23,7 @@ __all__ = [
     "customers_router",
     "health_router",
     "internal_agents_router",
+    "me_router",
     "sessions_router",
     "settings_router",
     "traces_router",

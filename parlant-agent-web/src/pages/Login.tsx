@@ -1,5 +1,5 @@
-/** 登录页（无侧栏）：IAM 账号登录 或 粘贴已有令牌（开发/联调）。 */
-import { useState, type FormEvent } from 'react'
+/** 登录页（无侧栏）：企业 SSO / 本地账号（IAM 密码）/ 粘贴令牌 三入口 + SSO 回跳收 token（doc11 §4.4）。 */
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { authApi } from '../api/client'
 import { useAuth, userFromToken } from '../store/auth'
@@ -14,6 +14,17 @@ export default function Login() {
   const [iamOpen, setIamOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // IAM SSO 成功回跳：`/login?access_token=<jwt>`（EventSource/query 兼容，doc11 §4.4）
+  // 收完立即清地址栏 query（token 不进浏览器历史 / 不随 Referer 外泄）+ 进工作台。
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('access_token')
+    if (t) {
+      setAuth(t, userFromToken(t))
+      window.history.replaceState(null, '', window.location.pathname)
+      navigate('/', { replace: true })
+    }
+  }, [setAuth, navigate])
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -67,15 +78,43 @@ export default function Login() {
         )}
 
         <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-6 shadow-sm">
-          {/* 默认折叠成卡片的 IAM 登录 / 粘贴令牌两个入口 */}
+          {/* 三入口（doc11 §4.4）：企业 SSO 主入口；本地账号表单；粘贴令牌（dev/联调） */}
+          <button
+            type="button"
+            onClick={() => { window.location.href = '/api/auth/sso/authorize?tenant_id=tenant-org-a' }}
+            className="mb-3 w-full rounded-lg bg-[var(--primary)] px-4 py-3 text-left text-[13px] font-semibold text-white hover:brightness-105"
+          >
+            企业 SSO 登录
+            <span className="mt-0.5 block text-[11px] font-normal text-white/75">
+              通过企业统一认证（Keycloak / 企业 IdP）进入工作台
+            </span>
+          </button>
+
+          {/* 个人账号：默认隐藏——IAM 侧 PLATFORM（Google/MSA）未配置时点了会 404（doc11 §5）；
+              本地用 VITE_IAM_SHOW_PERSONAL=1 开启。
+              企业按钮指向 tenant-org-a，个人指向 PLATFORM；同一 /sso/authorize 代码路径。 */}
+          {import.meta.env.VITE_IAM_SHOW_PERSONAL === '1' && (
+            <button
+              type="button"
+              onClick={() => { window.location.href = '/api/auth/sso/authorize?tenant_id=PLATFORM' }}
+              className="mb-3 w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-4 py-3 text-left text-[13px] font-medium text-[var(--ink)] hover:border-[var(--primary)] hover:shadow-sm"
+            >
+              个人账号登录（Google / 微软）
+              <span className="mt-0.5 block text-[11px] font-normal text-[var(--muted)]">
+                平台级 IdP（Google External / Microsoft MSA）
+              </span>
+            </button>
+          )}
+
+          {/* 本地账号（IAM 密码，BFF 转发验密在 IAM） */}
           <button
             type="button"
             onClick={() => setIamOpen(true)}
             className="mb-3 w-full rounded-lg border border-[var(--line)] bg-[var(--bg)] px-4 py-3 text-left text-[13px] font-medium text-[var(--ink)] hover:border-[var(--primary)] hover:shadow-sm"
           >
-            使用 IAM 账号登录
+            本地账号登录
             <span className="mt-0.5 block text-[11px] font-normal text-[var(--muted)]">
-              通过统一身份认证（unify IAM）获取工作台令牌
+              通过 IAM 用户名/密码（验密在 IAM 侧）
             </span>
           </button>
 

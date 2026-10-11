@@ -1,9 +1,11 @@
 # 11. parlant-agent 接入 unify-iam-server 方案：企业 SSO + 个人账号（极简登录页先行，P3 收敛 IAM）
 
-> 状态：**方案定稿，待实施**（2026-10-09）。
+> 状态：**方案定稿，parlant 侧代码已落地（2026-10-09）**；IAM 侧企业 SSO/本地账号就绪，个人账号（PLATFORM）待补配。
 > 依据：unify-iam-server `docs/01-总体设计与功能模块拆分` / `docs/03-E2E2-企业SSO`（含附录 A）；本仓库 M1 鉴权接缝（`app/authz/`）；`10-网关接入首阶段最小实现-E2E-1范围`。
 > 决策：**先在 parlant 加极简登录页跑通「企业账号 + 个人账号 + 本地账号」双账号；P3 再把 hosted 登录页收敛到 IAM（login hub）**，业务前端只留「去登录」跳转。
 > 核心承诺：**parlant 路由代码零改动**，仅换认证来源与登录入口。
+
+> **落地记录（2026-10-09）**：§4 已实现——server `settings.iam_sso_base`、`GET /api/auth/sso/authorize`（302 IAM）、受保护 `GET /api/me`（新 me_router，`Depends(get_context)`，不入 /api/auth 免认证前缀）；web Login.tsx 三入口（企业 SSO / 本地表单 / 粘贴）+ SSO 回跳收 token（setAuth + replaceState 清 query + navigate）+ 个人按钮默认隐藏（`VITE_IAM_SHOW_PERSONAL=1` 开启）；index.html `no-referrer`。进程内已验：sso/authorize→302 IAM、/api/me 无 token→401、带 IAM token→200（u-1000/tenant-org-a/9 权限）。server 重启后生效。
 
 ---
 

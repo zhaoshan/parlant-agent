@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     jwt_ttl_seconds: int = 28800            # 令牌有效期（E2E-1 签端点消费；认证侧校验用的是令牌内 exp）
     jwt_jwks_url: str = ""                   # AUTH_MODE=gateway（E2E-1）：IAM JWKS 端点
     iam_token_url: str = ""                  # 登录 BFF 的 IAM 令牌端点（POST {username,password}→access_token），空=登录页仅开发粘贴令牌
+    iam_sso_base: str = ""                   # SSO authorize 的 IAM 基址（doc11 §4.1：web 经本服务 302 跳转，不直写 IAM URL）；空=登录页不显示 SSO 入口
     internal_token: str = ""                 # runtime↔server 服务间信任（doc09 §4.4，未配置则不校验）
     token_transport: str = "query"           # SSE 令牌传输（doc09 §4.5）：query=短时 ?access_token（dev，EventSource 兼容）；cookie 预留（生产 HttpOnly）
 
