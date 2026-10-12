@@ -46,7 +46,9 @@ export default function AuthBootstrap({ children }: { children: ReactNode }) {
           const hub = m.hub_base || ''
           if (hub) {
             const returnTo = encodeURIComponent(`${window.location.origin}/`)
-            window.location.href = `${hub}/login?return_to=${returnTo}`
+            // app=parlant-agent-server：让 hub 的「企业组织」下拉只显示启用了 parlant 的租户
+            // （iam_tenant_application 管控，IAM /auth/sso/tenants?app_code= 过滤）
+            window.location.href = `${hub}/login?return_to=${returnTo}&app=parlant-agent-server`
           }
           // hub_base 未配：不放行会死等 → 落到下面 setBooted(true)，靠首请求 401 再兜底跳 '/'（client.ts）
         }
