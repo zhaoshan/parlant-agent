@@ -16,9 +16,12 @@ export interface AuthUser {
 
 interface AuthState {
   token: string | null
+  refresh_token: string | null  // 静默刷新（doc11 附录A）：IAM 轮换发新 refresh，持久化
   user: AuthUser | null
-  /** 登录/粘贴令牌后写入；auth=null 表示未知（从令牌解码补全） */
-  setAuth: (token: string, user?: AuthUser | null) => void
+  /** 登录/回跳/粘贴令牌后写入；refresh 可选（IAM 交付才带）；auth=null 表示未知（从令牌解码补全） */
+  setAuth: (token: string, user?: AuthUser | null, refresh?: string | null) => void
+  /** 静默刷新成功后原地换 access+refresh（保留 user），供 client.ts trySilentRefresh 用 */
+  setTokens: (access: string, refresh: string | null) => void
   clearAuth: () => void
 }
 
@@ -26,13 +29,20 @@ export const useAuth = create<AuthState>()(
   persist(
     (set) => ({
       token: null,
+      refresh_token: null,
       user: null,
-      setAuth: (token, user) => set({ token, user: user ?? null }),
-      clearAuth: () => set({ token: null, user: null }),
+      setAuth: (token, user, refresh) => set({ token, user: user ?? null, refresh_token: refresh ?? null }),
+      setTokens: (access, refresh) => set({ token: access, refresh_token: refresh }),
+      clearAuth: () => set({ token: null, refresh_token: null, user: null }),
     }),
     { name: 'parlant-auth' },
   ),
 )
+
+/** 当前 refresh_token（zustand 非 hook 读取：client.ts 静默刷新用）。 */
+export function getRefreshToken(): string | null {
+  return useAuth.getState().refresh_token
+}
 
 /** 解码 JWT payload（base64url，不验签——仅用于展示/回填用户信息；验签在 server）。 */
 export function decodeJwtPayload<T = Record<string, unknown>>(token: string): T | null {

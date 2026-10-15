@@ -1,7 +1,7 @@
 /** API 客户端：所有请求走 parlant-agent-server（BFF，开发期经 vite 代理 /api → 8081）。 */
 
 import type { AgentDetail, AgentInfo, AgentVersionInfo, Customer, Session, SessionLedgerRow, SessionMessage, SettingsInfo, TraceObservation } from './types'
-import { useAuth } from '../store/auth'
+import { getRefreshToken, useAuth } from '../store/auth'
 import type { AuthUser } from '../store/auth'
 
 const BASE = ''
@@ -11,18 +11,48 @@ export function getToken(): string | null {
   return useAuth.getState().token
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+// 静默刷新（doc11 附录A 项②，对照 unify-iam-web client.ts）：仅对【受保护端点】的 401 生效——
+// 有 refresh_token → 调 /api/auth/refresh（BFF 转发 IAM）轮换并原地重试一次；
+// 无 refresh_token 或刷新失败 → 清凭证整页回 '/'，AuthBootstrap 重新分流（dev 直进 / gateway 跳 hub）。
+// 公开认证端点（登录/mode/refresh 自身）的 401 是真实错误，须透出、不走刷新。
+const PUBLIC_AUTH_PATHS = ['/api/auth/login', '/api/auth/mode', '/api/auth/refresh']
+function isPublicAuth(path: string): boolean {
+  return PUBLIC_AUTH_PATHS.some((p) => path.startsWith(p))
+}
+
+async function trySilentRefresh(): Promise<boolean> {
+  const rt = getRefreshToken()
+  if (!rt) return false
+  try {
+    const res = await fetch(`${BASE}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: rt }),
+    })
+    if (!res.ok) return false
+    const data = (await res.json()) as { access_token: string; refresh_token?: string | null }
+    useAuth.getState().setTokens(data.access_token, data.refresh_token ?? null)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit, retried = false): Promise<T> {
   const headers = new Headers(init?.headers)
   const token = getToken()
   if (token) headers.set('Authorization', `Bearer ${token}`)
   const resp = await fetch(`${BASE}${path}`, { ...init, headers })
-  if (resp.status === 401) {
-    // 令牌缺失/过期：清凭证并整页回 `/`——AuthBootstrap 会重新分流（dev→直进 / gateway→跳 IAM hub），
-    // 登录端点自身豁免（避免"未认证→再跳登录"死循环）。
-    if (!path.startsWith('/api/auth/')) {
-      useAuth.getState().clearAuth()
-      if (window.location.pathname !== '/') window.location.href = '/'
+  if (resp.status === 401 && !isPublicAuth(path)) {
+    const refreshed = await trySilentRefresh()
+    if (refreshed) {
+      if (retried) throw new Error('令牌已过期，刷新失败')
+      return request<T>(path, init, true) // 用新 token 原地重试一次
     }
+    // 刷新失败/无 refresh_token：清凭证整页回 '/'（AuthBootstrap 重新分流）
+    useAuth.getState().clearAuth()
+    if (window.location.pathname !== '/') window.location.href = '/'
+    throw new Error('登录已过期，请重新登录')
   }
   if (!resp.ok) {
     let detail = `${resp.status} ${resp.statusText}`

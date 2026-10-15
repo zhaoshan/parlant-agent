@@ -29,9 +29,11 @@ export default function AuthBootstrap({ children }: { children: ReactNode }) {
     }
     const run = async () => {
       // ① IAM hub 回跳：URL 带 ?access_token → 收 token、清地址栏、进
-      const urlToken = new URLSearchParams(window.location.search).get('access_token')
+      //    （doc11 附录A 项①：若 hub 一并交付 ?refresh_token 则存下，供 401 静默刷新）
+      const params = new URLSearchParams(window.location.search)
+      const urlToken = params.get('access_token')
       if (urlToken) {
-        useAuth.getState().setAuth(urlToken, userFromToken(urlToken))
+        useAuth.getState().setAuth(urlToken, userFromToken(urlToken), params.get('refresh_token'))
         window.history.replaceState(null, '', window.location.pathname)
         setBooted(true)
         navigate('/', { replace: true })

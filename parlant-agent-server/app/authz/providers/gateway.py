@@ -24,6 +24,7 @@ from fastapi import Request
 from app.authz.context import AuthorizationContext
 from app.authz.errors import AuthError
 from app.authz.token import claims_to_context, extract_token
+from app.authz.versions import TokenVersionGuard
 
 
 class GatewayProvider:
@@ -34,11 +35,22 @@ class GatewayProvider:
         self.audience = settings.jwt_audience or None  # None=不校验 aud
         self.issuer = settings.jwt_issuer or None  # None=不校验 iss
         self.transport = getattr(settings, "token_transport", "query") or "query"
-        # 可选：token 解码时若 aud/iss 缺失也宽松放行（IAM 侧常不强制；服务严格端可在 settings 配）
+        # 权限即时吊销（doc11 附录B / user-manual §6 方案①）：每请求点查 IAM 版本，落后/tombstone → 401。
+        # iam_versions_token 空 → 关闭（不做即时吊销，靠静默刷新/缩短 TTL 兜底）。
         if not self.jwks_url:
             raise RuntimeError(
                 "AUTH_MODE=gateway 需要配置 JWT_JWKS_URL（IAM 的 /.well-known/jwks.json 端点）"
             )
+        self._ver_guard = TokenVersionGuard(
+            versions_url=settings.iam_versions_url
+            or (
+                settings.iam_token_url.rstrip("/").rsplit("/token", 1)[0] + "/versions"
+                if settings.iam_token_url
+                else ""
+            ),
+            service_token=settings.iam_versions_token,
+            app_code=settings.jwt_audience or "parlant-agent-server",
+        )
         self._client: jwt.PyJWKClient | None = None  # 懒初始化：首次验签才联网拉，启动不阻塞
 
     def _jwks(self) -> jwt.PyJWKClient:
@@ -80,4 +92,15 @@ class GatewayProvider:
             raise AuthError(401, "令牌已过期") from None
         except jwt.InvalidTokenError as exc:
             raise AuthError(401, f"令牌无效：{exc}") from exc
-        return claims_to_context(payload)
+        ctx = claims_to_context(payload)
+        # 方案 c（方案① 每请求点查）：token.ver 落后 / tombstone(-1) → 401（配合 b 静默刷新无感续期）；
+        # IAM 点查不可用 → 502 fail-closed（可用性耦合，方案① 的显式代价）。路由零改动。
+        membership_id = ctx.membership_id
+        if membership_id and self._ver_guard.enabled:
+            try:
+                self._ver_guard.check(membership_id, int(payload.get("ver") or 0))
+            except PermissionError as exc:
+                raise AuthError(401, str(exc)) from None
+            except (ConnectionError, RuntimeError) as exc:
+                raise AuthError(502, str(exc)) from None
+        return ctx

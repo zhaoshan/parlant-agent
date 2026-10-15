@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     jwt_audience: str = "parlant-agent-server"
     jwt_jwks_url: str = ""                   # AUTH_MODE=gateway（E2E-1）：IAM JWKS 端点
     iam_token_url: str = ""                  # 登录 BFF 的 IAM 令牌端点（POST {username,password}→access_token）；空=本地账号入口 503
+    iam_refresh_url: str = ""                # 静默刷新（doc11 附录A）：IAM refresh 端点（POST {refresh_token}→新 access+refresh 轮换）；空=由 iam_token_url 同源推导 /api/v1/auth/refresh
+    iam_versions_url: str = ""               # 权限即时吊销（doc11 附录B / user-manual §6 方案①）：IAM 版本点查端点；空=由 iam_token_url 同源推导 /api/v1/auth/versions
+    iam_versions_token: str = ""             # X-IAM-Service-Token（对齐 IAM iam.versions.service-token）；空=关闭版本校验（不做即时吊销）
     iam_sso_base: str = ""                   # SSO authorize 的 IAM 后端基址（doc11 §4.1）；gateway 下企业 SSO 经此 302
     iam_hub_base: str = ""                   # IAM 统一登录 hub（unify-iam-web）基址；gateway 模式 web 无 token 时跳它登录，回跳带 ?access_token；dev 不用
     internal_token: str = ""                 # runtime↔server 服务间信任（doc09 §4.4，未配置则不校验）

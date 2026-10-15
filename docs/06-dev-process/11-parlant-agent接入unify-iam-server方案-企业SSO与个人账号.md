@@ -208,3 +208,170 @@ web 点「企业 SSO」
 - IAM：`/Users/zhaoshan/workspace/unify-iam-server/docs/03-E2E2-企业SSO与组织接入.md`（§8.1 个人租户、§10 IdP 接入、§13.1 前端承载）
 - IAM P3：`/Users/zhaoshan/workspace/unify-iam-server/docs/04-E2E3-P3管理面与账号生命周期设计.md`（登录 UI 能力）
 - 本仓库 M1：`docs/06-dev-process/09-M1-API加固与输入审核实施方案.md`、`10-网关接入首阶段最小实现-E2E-1范围.md`（原 `03-production/16/17`，2026-10-09 随 docs 重组迁移）
+
+---
+
+## 附录 A：权限变更感知——静默刷新（方案 b，parlant 侧已实施）
+
+> 状态：**parlant 侧已实施（2026-10-14）**；SSO 回跳交付 refresh_token 已由 **IAM 侧落地（2026-10-14）**——`OidcController.callback` 302 回跳携带 refresh_token + hub `Login.tsx` 外跳转发（项①），parlant AuthBootstrap 接 `?refresh_token` 后**端到端激活**。背景：IAM `docs/07 §8.3`「角色变更后的重新校验」——parlant 本地 JWKS 验签（无状态），IAM 改了角色/权限，parlant 已签发 token 的 `roles/permissions` **不即时生效**（当前 TTL 7200s）。本附录给 parlant 侧接入「静默刷新（方案 b）」的落地明细，由 parlant 侧自行实施。
+
+> **落地记录（2026-10-14，parlant 侧）**：① store/auth.ts 增 `refresh_token` 持久化 + `setTokens`/`getRefreshToken`；AuthBootstrap 回跳同时接 `?refresh_token`（IAM 交付即存）；② client.ts `trySilentRefresh` + `request(path,init,retried)`——受保护端点 401 → 调 BFF `/api/auth/refresh`（转发 IAM，轮换）→ 成功换新 token **原地重试一次**，失败才清凭证回 `/`（AuthBootstrap 重新分流）；公开端点（login/mode/refresh）401 透出真实错误；③ server `routers/auth.py` +`POST /api/auth/refresh`（转发 `iam_refresh_url`，默认由 `iam_token_url` 同源推导）+ `LoginResponse.refresh_token` 透传；settings +`iam_refresh_url`。已验证：IAM 本地登录已返 refresh_token → BFF refresh 轮换 200（新 access 带当前全权限过验签）、坏 token 401 透传、旧 token 轮换后作废。
+
+### A.1 生效机制与延迟
+
+```
+权限变更（IAM 管理台改角色）
+  → 已签发 token 仍带旧权限（无状态，parlant 验签不感知）
+  → access token 过期（TTL）
+  → parlant-web 请求 401
+  → 【静默刷新】parlant-web 调 IAM POST /auth/refresh（带 refresh_token）
+      → 返回【带当前角色】的新 access_token（轮换：旧 refresh 作废 + 新 refresh 返回）
+  → 用新 token 重试 → 新权限生效（用户无感）
+```
+
+**感知延迟 = access token 的 TTL**（配合缩短 TTL 可接受）。要求秒级则需方案 c（denylist/token-version，归 P4/安全），本附录不展开。
+
+### A.2 方案分级（IAM `docs/07 §8.3`）
+
+| 方案 | 说明 | parlant 侧 |
+|---|---|---|
+| **a. 缩短 TTL** | IAM `iam.jwt.ttl-seconds` 7200 → 1800~3600s | 仅配置/协调，无代码 |
+| **b. 静默刷新** | token 过期 → parlant-web 调 `/auth/refresh` 换新 token | **本附录要做的** |
+| c. 即时吊销 | denylist / token version，破坏无状态 | 归 P4，暂不做 |
+
+### A.3 parlant 侧待实施明细（3 项）
+
+**① 拿到 refresh_token（收敛链路扩展）✅ IAM 侧已落地（2026-10-14）**
+- **交付决策：URL query**（与 access_token 一致）——hub 是全页 `window.location.replace` 跳转，postMessage/一次性 code 不适合当前形态；泄漏面（地址栏/历史/Referer/日志）由既有缓解覆盖：hub `ALLOWED_RETURN_ORIGINS` 白名单 + parlant AuthBootstrap 收完立即 `replaceState` 清 query + 登录页 `no-referrer`。未来收紧可升级一次性 code 交换。
+- **IAM 后端**：`OidcController.callback` 302 回跳由仅 `access_token` 改为**同时携带 `refresh_token`**（SSO 路径本就经 `issueWithRefresh` 签发）；集成测试 `OidcSsoIntegrationTest.callbackRedirectCarriesAccessAndRefreshToken` 覆盖（含 `/auth/refresh` 轮换消费）。
+- **IAM hub 前端**：`Login.tsx` SSO 回跳收 `?refresh_token` 存入 hub store（hub 自身 SSO 会话也可静默刷新）+ `finishLogin` 外跳业务应用时**追加转发 `refresh_token`**（本地登录路径同步补上）。
+- **parlant 侧**：AuthBootstrap 已接 `?refresh_token` 存入 store（无需再改）；hub 回跳带 refresh_token 后即**端到端激活**。
+
+**② parlant-web 401 → 静默刷新（client.ts）**
+- 现状：`parlant-web/src/api/client.ts` 收到 401 → `clearAuth()` + 整页回 `/` → AuthBootstrap 重新分流（跳 hub 重登）。
+- 改为：401 时（非公开端点）先调 IAM `/auth/refresh`（用 store 里的 refresh_token）→ 成功则更新 store（新 access + 新 refresh）→ **原地重试一次**；失败才清凭证 → AuthBootstrap 跳 hub。
+- 参考实现：unify-iam-web `src/api/client.ts`（`trySilentRefresh` + `request(path, init, retried)` 已落地），模式可直接对照。
+- 公开端点（login/refresh 自身）的 401 透出真实错误、不走刷新（同 unify-iam-web 的 `PUBLIC_AUTH_PATHS`）。
+
+**③ 配套**
+- server 侧无需改（验签不变，token 是新的、带当前权限即可通过）。
+- `.env` 可加 `IAM_REFRESH_URL`（默认 `$IAM_TOKEN_URL` 同源 `/api/v1/auth/refresh`）或直连 IAM base。
+- 建议同时缩短 IAM TTL（方案 a）让感知延迟可控。
+
+### A.4 验收
+
+1. IAM 给某用户改角色（增/减权限）
+2. 该用户在 parlant 已登录（token 未过期）→ 旧权限仍生效（预期，TTL 内）
+3. 等到 token 过期（或临时缩短 TTL 验证）→ parlant 请求 401 → 自动静默刷新 → **新权限生效且用户无感**（无跳转、无重新登录）
+4. refresh 失效（撤销/过期）→ 清凭证 → AuthBootstrap 跳 hub 重新登录（兜底）
+
+### A.5 相关
+
+- IAM `docs/07-管理面SSO配置-IdP配置与组角色映射.md` §8.3（待办：a 缩短 TTL / b 静默刷新 / c denylist）
+- unify-iam-web `src/api/client.ts`（静默刷新参考实现，已落地）
+- 本仓库 `docs/06-dev-process/09-M1`（API 加固 / client.ts 401 处理基线）
+
+---
+
+## 附录 B：权限变更感知——即时吊销（方案 c，denylist / token-version）
+
+> 状态：**IAM 侧已实施（2026-10-15，V10）**——`gateway_membership.token_version` + 变更日志 + 版本 feed（`X-IAM-Service-Token` 鉴权、app 作用域、增量游标、tombstone 哨兵 `version:-1`）+ JWT `ver` claim；bump 点已接（成员角色替换/审批、角色权限变更、IdP 组映射变化、成员移除 tombstone）。**parlant 侧已实施（2026-10-15，方案① 每请求点查）**。背景：方案 a（缩短 TTL）/ b（静默刷新，附录 A）把感知延迟降到 TTL 内（分钟~小时级），仍非「即时」；若要求**权限一变、旧 token 立刻失效**，需方案 c——无状态 JWT 无法自证失效，必须引入 parlant↔IAM 的版本同步。
+
+> **落地记录（2026-10-15，parlant 侧）**：按 user-manual §6 **方案①（每请求点查）**实现——`app/authz/versions.py` 新增 `TokenVersionGuard`（点查 IAM `GET /api/v1/auth/versions?app_code=&membership_id=`，`X-IAM-Service-Token` 鉴权）；`GatewayProvider._verify` 验签后追加一步：`token.ver` 落后或 tombstone(-1) → **401「权限已变更」**（配合附录 A 静默刷新无感续期），IAM 点查不可用 → **502 fail-closed**（方案① 的可用性耦合代价）；`settings` +`iam_versions_url`/`iam_versions_token`（空=关闭版本校验）。路由零改动、前端零改动。已验证：相等/落后/墓碑/未见/404/关闭态六例全过。**激活依赖**：IAM 侧 V10 迁移**尚未落库**（flyway 历史无 V10、`token_version` 列不存在）、运行实例为旧代码（versions 端点 404、token 无 ver）——需 IAM 重启应用 V10 + 配置 `IAM_VERSIONS_SERVICE_TOKEN` 后，再在 parlant `.env` 配 `IAM_VERSIONS_TOKEN` 启用。
+
+### B.1 生效机制与延迟
+
+```
+权限变更（IAM 管理台改角色）
+  → IAM bump 该成员 token_version（membership.token_version +1）
+  → 旧 token 仍带旧 ver（签发时的版本），无状态验签不感知
+  → parlant 后台定时（如 30~60s）拉取 IAM 版本 feed 缓存 {membership_id: version}
+  → 请求验签后比较 token.ver vs 缓存：缓存版本 > token.ver → 401「权限已变更」
+  → （配合附录 A 方案 b）401 → 静默刷新 → 拿带新 ver 的新 token → 重试 → 新权限生效
+```
+
+**感知延迟 = feed 刷新间隔**（秒级~分钟级，非「变更后下一次请求即失效」，而是「下一次版本同步后失效」）。要「变更→下个请求立即 401」需每请求向 IAM 点查（完全放弃无状态 + 打满 IAM），本方案不采用。
+
+### B.2 与方案 a/b 的关系（c 与 b 是配合关系，不互斥）
+
+| 方案 | 作用 | 单独使用时 |
+|---|---|---|
+| a 缩短 TTL | 收窄「旧权限生效窗口」 | 窗口仍 = TTL（1800~3600s） |
+| b 静默刷新 | 过期后自动换新 token | 感知延迟 = TTL |
+| **c 即时吊销** | **旧 token 及时失效**（不等 TTL） | **失效后不自动续**——用户要重登 |
+
+- **c + b = 完整闭环**：c 负责「及时判定失效」，b 负责「失效后无感续期」。只做 c 不做 b，权限变更后所有旧会话收到 401 但无自动恢复（体验差）；只做 b 不做 c，延迟 = TTL。
+- 结论：方案 c 落地时应**同时**具备 b（parlant-web 静默刷新已实施，见附录 A）作为续期通道。
+
+### B.3 版本模型与 feed 量级（关键设计决策）
+
+**核心问题：parlant 拉取版本缓存，是拉全部成员吗？量会不会很大？**
+
+两个独立维度，决定了「拉多少」：
+
+**① 范围裁剪（决定缓存里装谁）**
+- **app 作用域**：feed 只含「租户启用了 parlant-agent-server」的成员（IAM `iam_tenant_application` 过滤）——个人租户、其他应用租户的 token 永远不会打到 parlant，不进 feed。
+- **仅缓存「见过的」成员**：parlant 首启灌一次快照后，只在**首次遇到新 membershipId** 时点查单条（`GET /api/v1/auth/versions?membership_id=xxx`），之后靠增量维护。缓存 ≈ 活跃用户集，而不是成员表全集。
+
+**② 全量 vs 增量（决定每次拉多少）**
+- 全量快照：`{membership_id: version}` 一条约 40~50 字节——**即使 1 万成员全量也仅 ~500KB/次**，对本项目（单应用、几十~几百成员）完全不是问题。
+
+| 成员数 | 全量 JSON 体积 |
+|---|---|
+| 100 | ~5 KB |
+| 1,000 | ~50 KB |
+| 10,000 | ~500 KB |
+| 100,000 | ~5 MB（此时应切增量） |
+
+- **增量 feed（推荐，从第一天就设计好）**：版本只有「变更时」才有价值，多数成员版本终生为 0 从不变化。delta 契约让 feed 体积跟着**变更频率**走，而不是跟着**成员总数**走：
+
+```
+GET /api/v1/auth/versions?since=<cursor>
+→ { "cursor": 12345, "items": [ {"membership_id":"...","version":3}, ... ] }
+首次 since=0 → 返回全量快照；之后 since=<上次 cursor> → 只返回变更过的成员。
+删除/成员失效 → tombstone：{"membership_id":"...","version":-1}（哨兵，-1 永不自然出现；全局 NON_NULL 会丢 null，故用显式哨兵）
+→ parlant 从缓存移除 → 旧 token 立即拒绝。
+```
+
+**③ 更省但更糙的对照：全局 epoch**（feed 体积恒为 O(1)）
+- 任意授权变更 bump 一个全局 `permissions_epoch`，token 带签发 epoch；parlant 缓存 `{epoch:12345}` 一个整数即可，**彻底没有量级问题**。
+- 代价：一次变更 → 全局 +1 → **所有人的旧 token 同时失效** → 集体触发静默刷新 = **刷新风暴**（小规模无感，规模大了瞬时压 `/auth/refresh`）。
+- 取舍：**per-membership 版本** = feed 大小 O(成员数)/O(变更数)、一次变更只波及当事人（推荐）；**全局 epoch** = feed 恒 1 个数、但一次变更波及全体 token。
+
+**结论：** 量不大；正确做法是「**app 作用域 + 增量 feed**」，让体积跟变更数走而非成员总数；parlant 侧只缓存活跃成员。当前规模即使直接全量快照也毫无压力，delta 契约是为规模预留的扩展点。
+
+### B.4 IAM 侧变更清单
+
+| # | 变更 | 说明 |
+|---|---|---|
+| ① Schema | `gateway_membership` 加 `token_version INT DEFAULT 0` | 每成员令牌版本 |
+| ② JWT 契约 | `JwtClaims` 加 `ver`（签发时读 membership.token_version 写入） | **契约变化**：IAM CLAUDE.md「锁死契约」同步更新；parlant 侧仅比较、不参与验签，现有校验兼容 |
+| ③ Bump 点 | 成员角色变更：`setRoles`/增删成员/邀请接受/审批通过/**JIT 组映射同步**；角色权限变更：批量 bump 该角色作用域下所有成员 | 角色权限变更影响多成员 → 批量 UPDATE（`gateway_membership SET token_version=token_version+1 WHERE membership_id IN (SELECT ... WHERE role_id=?)`） |
+| ④ Feed 端点 | `GET /api/v1/auth/versions?since=<cursor>` → `{cursor, items}`；tombstone 用 `version:-1` 哨兵（全局 NON_NULL 丢 null） | 首次 since=0 全量、之后增量；删除发 tombstone；按 app 作用域过滤；`X-IAM-Service-Token` 鉴权（`iam.versions.service-token`） |
+| ⑤ Feed 鉴权 | **`X-IAM-Service-Token` 请求头 == `iam.versions.service-token`（常量时间比较）**；未配置 → 端点 403 禁用 | parlant 侧 `.env` `IAM_VERSIONS_TOKEN` 对齐 |
+| ⑥ 变更日志 | 版本变更落一张 changelog 表（membership_id, version, cursor, 变更时间），feed 读它 | 支撑增量/游标/回放 |
+
+### B.5 parlant 侧变更清单
+
+| # | 变更 | 说明 |
+|---|---|---|
+| ① 后台版本缓存 | 定时任务（30~60s）拉 IAM 版本 feed，进程内缓存 `{membership_id: ver}` | 首启 since=0 全量灌一次（几 KB），之后增量 merge；新 `app/authz/versions.py` |
+| ② 请求时校验 | `GatewayProvider` 验签后追加一步：token.membershipId 的缓存版本 > token.ver → 401「权限已变更，请重新登录」；成员不在缓存 → 放行或点查一次 | 只在 `app/authz/providers/gateway.py` 加，**路由零改动** |
+| ③ 401 续期 | 配合附录 A 方案 b：401 → 静默刷新 → 新 token（ver 已更新）→ 重试 | **c 单独不自动续**；c+b 才是「及时失效 + 无感续期」 |
+| ④ 配置 | `.env` 加 `IAM_VERSIONS_URL`（feed 地址）+ `IAM_VERSIONS_REFRESH_SECONDS`（默认 30~60） | |
+
+> 前端无需改动：401 → 静默刷新已具备（附录 A），方案 c 只是让 401 提前发生。
+
+### B.6 验收
+
+1. IAM 给某用户改角色（增/减权限）→ 该成员 `token_version` +1
+2. 该用户在 parlant 已登录（token 未过期）→ feed 刷新间隔内仍用旧权限（预期窗口 = 间隔）
+3. 超过 feed 刷新间隔后：旧 token 请求 → 401 →（配合 b）静默刷新 → **新权限生效且用户无感**
+4. 成员被移除/租户停用 → tombstone 下发 → 旧 token 拒绝（不等 TTL）
+5. feed 无鉴权 / 版本被篡改 → 应 401 拒绝（服务间鉴权生效）
+
+### B.7 相关
+
+- IAM `docs/07-管理面SSO配置-IdP配置与组角色映射.md` §8.3（待办：a 缩短 TTL / b 静默刷新 / **c denylist**）
+- 本附录「附录 A：静默刷新（方案 b）」——c 的续期通道
+- IAM `docs/06-应用角色模板与租户级管理面设计.md`（`iam_tenant_application` app 作用域裁剪依据）

@@ -42,6 +42,11 @@ class LoginResponse(BaseModel):
     token_type: str | None = "bearer"
     expires_in: int | None = None
     user: dict[str, Any] | None = None
+    refresh_token: str | None = None  # 静默刷新（doc11 附录A）：IAM 轮换返回的新 refresh；可能为空
+
+
+class RefreshBody(BaseModel):
+    refresh_token: str
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -82,12 +87,57 @@ async def login(body: LoginBody) -> LoginResponse:
         token_type=data.get("token_type") or "bearer",
         expires_in=data.get("expires_in"),
         user=data.get("user") or None,
+        refresh_token=data.get("refresh_token"),
+    )
+
+
+@router.post("/refresh", response_model=LoginResponse)
+async def refresh(body: RefreshBody) -> LoginResponse:
+    """静默刷新（doc11 附录A）：把 refresh_token 转发 IAM 换新 access+refresh（轮换）。
+
+    公开（`/api/auth` 白名单）：access 过期时 web 用它续期拿「带当前角色」的新 token；
+    refresh 有效性校验在 IAM（作废/过期→非 2xx 原样转发）。server 验签层无需改动（新 token 自带当前权限）。
+    """
+    settings = get_settings()
+    base = settings.iam_token_url.rstrip("/")
+    url = settings.iam_refresh_url or (base.rsplit("/token", 1)[0] + "/refresh" if settings.iam_token_url else "")
+    if not url:
+        raise HTTPException(503, "IAM 未配置（缺 IAM_TOKEN_URL/IAM_REFRESH_URL）：无法刷新令牌")
+    async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
+        try:
+            resp = await client.post(url, json={"refresh_token": body.refresh_token})
+        except httpx.HTTPError as exc:
+            raise HTTPException(502, f"IAM 不可达：{type(exc).__name__}: {exc}") from None
+    if resp.status_code != 200:
+        # 原样转发 IAM 报错（401=refresh 失效/过期，前端据此清凭证走重登）
+        detail: str | None = None
+        try:
+            err = resp.json()
+            detail = err.get("detail") or err.get("message") or err.get("error")
+        except ValueError:
+            pass
+        raise HTTPException(resp.status_code, detail or f"IAM 返回 {resp.status_code}")
+    data = resp.json()
+    token = data.get("access_token") or data.get("token")
+    if not token:
+        raise HTTPException(502, "IAM 返回成功但缺 access_token")
+    return LoginResponse(
+        access_token=token,
+        token_type=data.get("token_type") or "bearer",
+        expires_in=data.get("expires_in"),
+        user=data.get("user") or None,
+        refresh_token=data.get("refresh_token"),
     )
 
 
 @router.get("/sso/authorize")
 async def sso_authorize(tenant_id: str = "tenant-org-a") -> RedirectResponse:
     """302 到 IAM OIDC authorize（企业=tenant-org-a / 个人=PLATFORM）。
+
+    ⚠️ 历史定位（doc11 形态 A→B 演进，2026-10-11 起已闲置）：本端点诞生于 parlant **自带 Login 页**
+    时代——web 点「企业 SSO」经它 302 到 IdP 登录。形态 B 把登录页收归 IAM hub（unify-iam-web）后，
+    浏览器登录改由 `AuthBootstrap` 直接跳 `iam_hub_base` 的 hub 页发起，**不再经过本端点**（web 侧已无调用）。
+    现保留作「形态 A 直连 IAM」的 BFF 能力（curl / 未来直连入口仍可一键发起 SSO），无副作用。
 
     浏览器顶层导航到 IAM（不触发 CORS）；IAM 验 IdP → 302 回前端 `/login?access_token=`。
     `iam_sso_base` 未配置时返回 503（前端据此不展示 SSO 入口，避免裸 404）。
