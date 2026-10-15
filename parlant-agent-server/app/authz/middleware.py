@@ -59,6 +59,14 @@ class AuthzMiddleware:
             )
             await response(scope, receive, send)
             return
+        # 登录态请求日志：打印 claims 翻译出的用户/租户/角色/权限（含 dev 模式占位身份）。
+        # 只打 ctx 字段、**不打原始 token**（避免凭据进日志）。
+        print(
+            f"[authz] 已认证 {scope.get('method', '?')} {path} "
+            f"user={ctx.user_id} tenant={ctx.tenant_id} "
+            f"membership={ctx.membership_id or '-'} roles={sorted(ctx.roles)} "
+            f"permissions={sorted(ctx.permissions)}"
+        )
         # 共享已认证上下文：端点经 request.state 读取（Starlette Request.state 即 scope["state"]）
         scope.setdefault("state", {})["auth_context"] = ctx
         await self.app(scope, receive, send)
