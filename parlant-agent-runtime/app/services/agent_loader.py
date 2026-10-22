@@ -99,6 +99,10 @@ class AgentLoader:
 
     def __init__(self, server: p.Server) -> None:
         self._server = server
+        # 已调度过评估的指南：guideline_id -> 内容指纹（复用 SDK 内容寻址哈希）。
+        # 避免 `_evaluate_guidelines_now` 每次 load 遍历全量注册表把已评指南重复调度
+        # （并发双写缓存 + 白烧 LLM）；内容变了指纹不同 → 照常重评（热加载/发布新版本）。
+        self._guideline_eval_scheduled: dict[str, str] = {}
 
     # ------------------------------------------------------------ 公开入口
     async def load(self, definition: AgentDefinition) -> p.Agent:
@@ -131,6 +135,8 @@ class AgentLoader:
             await self._build_observations(agent, definition, canrep_map, journey_map)
             await self._build_relationships(agent, definition, guideline_ids, set(journey_map))
             self._evaluate_journeys_now(list(journey_map.values()))
+            # 指南元数据同样需要后台评估（SDK __aexit__ 零预加载后不再覆盖，见方法注释）
+            self._evaluate_guidelines_now()
         except Exception:
             # 失败回滚：删干净，避免"建了一半"的 agent
             await self._delete_agent_entities(agent_def.id)
@@ -175,9 +181,15 @@ class AgentLoader:
             f"[eval诊断] 旅程评估开始 id={journey.id} title={journey.title} "
             f"hash={(_hash or '?')[:8]} cache命中预判={cache_hit}"
         )
+        # 进度监控：评估是黑盒（实测 7-8 分钟无中间日志）；后台任务每 ~20s 读一次
+        # _progress_for 打进度，避免"开始后长时间无输出像卡死"。
+        monitor = asyncio.create_task(self._monitor_eval_progress("旅程", journey.id, t0))
         try:
             result = await asyncio.wait_for(
                 self._server._evaluator.evaluate_journey(journey),  # noqa: SLF001
+                # 900s：零预加载后 loader 是唯一评估器（SDK __aexit__ 不再覆盖）。
+                # 实测单旅程 7-8 分钟（SiliconFlow，双评估消除后余量充足）；慢模型日
+                # 若超时可再抬，勿降。
                 timeout=900,
             )
             await self._server._apply_single_evaluation(  # noqa: SLF001
@@ -198,6 +210,95 @@ class AgentLoader:
                 f"错误={type(exc).__name__}: {exc}"
             )
             print(f"⚠️ 旅程评估失败（分叉推进可能退化）：{journey.id}: {exc}", flush=True)
+        finally:
+            monitor.cancel()
+
+    def _evaluate_guidelines_now(self) -> None:
+        """装配后**后台**评估**新注册**的指南（continuous / customer_dependent_action_data 等）。
+
+        背景（2026-10-22）：启动改零预加载后 SDK `__aexit__` 不再评估任何实体，而
+        `_evaluate_journeys_now` 只覆盖旅程 → 指南元数据无人产出 → 匹配行为退化
+        （热加载的指南此前本就有此缺口）。与旅程评估同模式：create_task 后台 +
+        内容寻址缓存（内容未变秒回）；单条超时 900s。
+
+        判重（2026-10-22）：注册表 `_guideline_evaluations` 跨 load 累积，若每次 load
+        全量遍历会把已评指南重复调度（并发双写缓存 + 白烧 LLM）。这里按**内容指纹**
+        （复用 SDK `_hash_guideline_evaluation_request` = 缓存键）只评新内容：
+        同 id 内容未变 → 跳过；内容变（热加载/发布新版本）→ 指纹不同 → 照常重评。
+        注意：注册表在 **Server**（`self._server._guideline_evaluations`），不在
+        `_evaluator` 上——误访问 `_evaluator._guideline_evaluations` 会 AttributeError，
+        且会触发 load() 回滚删实体、殃及已调度的旅程评估任务（2026-10-22 踩过）。
+        """
+        evaluator = self._server._evaluator  # noqa: SLF001
+        for guideline_id, (args, func) in list(
+            self._server._guideline_evaluations.items()  # noqa: SLF001
+        ):
+            try:
+                # args = (guideline_id, GuidelineContent, tool_ids)；flags 用评估默认 False/True
+                fp = evaluator._hash_guideline_evaluation_request(  # noqa: SLF001
+                    args[1], args[2], False, True
+                )
+            except Exception:  # noqa: BLE001 - 指纹失败退化为按 id 判重
+                fp = str(args)
+            if self._guideline_eval_scheduled.get(guideline_id) == fp:
+                continue  # 同内容已调度过，不再重复评估
+            self._guideline_eval_scheduled[guideline_id] = fp
+            asyncio.create_task(self._evaluate_guideline(guideline_id, args, func))
+
+    async def _evaluate_guideline(self, guideline_id: str, args: tuple, func: Any) -> None:
+        """单条指南后台评估 + 应用（结果写入指南 metadata）。失败仅影响该条指南元数据。"""
+        import time as _time
+
+        t0 = _time.monotonic()
+        monitor = asyncio.create_task(self._monitor_eval_progress("指南", guideline_id, t0))
+        try:
+            result = await asyncio.wait_for(func(*args), timeout=900)
+            await self._server._apply_single_evaluation(  # noqa: SLF001
+                "guideline", guideline_id, result
+            )
+            logger.info(
+                f"[eval诊断] 指南评估完成 id={guideline_id} 用时={_time.monotonic() - t0:.1f}s"
+            )
+        except Exception as exc:  # noqa: BLE001 - 指南评估失败不影响装配/其它指南
+            logger.warning(f"[eval诊断] 指南评估失败 {guideline_id}: {type(exc).__name__}: {exc}")
+        finally:
+            monitor.cancel()
+
+    async def _monitor_eval_progress(self, kind: str, entity_id: str, t0: float) -> None:
+        """评估期间定期打进度日志：进度变化即打；进度到顶但任务未结束（LLM 编译收尾）打标注。
+
+        SDK `_CachedEvaluator` 每 0.5s 轮询评估任务时更新 `_progress_for(entity_id)`——
+        它是 stretch/increment 检查点计数，会**提前到 100%**（其后相对动作/分叉计算不再
+        更新它），故到顶后打"收尾中"标注避免像卡死。评估结束由调用方 finally 取消。
+        """
+        import time as _time
+
+        last_pct: float | None = None
+        last_log = 0.0
+        while True:
+            await asyncio.sleep(20)
+            try:
+                pct = self._server._evaluator._progress_for(entity_id)  # noqa: SLF001
+            except Exception:  # noqa: BLE001 - 监控失败不影响评估
+                return
+            now = _time.monotonic()
+            if pct >= 99.9:
+                # 进度到顶但任务未完成 = 评估收尾（RelativeActionProposer / 可达分叉计算）
+                if (now - last_log) >= 60:
+                    logger.info(
+                        f"[eval诊断] {kind}评估收尾中 id={entity_id} 进度=100% "
+                        f"已用时={now - t0:.0f}s（相对动作/分叉计算，进度到顶非卡死）"
+                    )
+                    last_log = now
+                last_pct = pct
+                continue
+            changed = last_pct is None or abs(pct - last_pct) >= 1.0
+            if changed or (now - last_log) >= 60:
+                logger.info(
+                    f"[eval诊断] {kind}评估进度 id={entity_id} 进度={pct:.0f}% 已用时={now - t0:.0f}s"
+                )
+                last_log = now
+            last_pct = pct
 
     async def unload(self, agent_id: str) -> bool:
         """卸载 agent 及其子实体；不存在返回 False。"""

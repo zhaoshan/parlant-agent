@@ -109,6 +109,9 @@ class SessionService:
             instance_id = agent_id
             version = await self._published_version(agent_id)
             status = "published"
+            # 启动零预加载后，首次建会话需确保 published agent 已加载进 runtime
+            # （parlant create_session 会 read_agent，未加载抛 ItemNotFoundError）
+            await self._ensure_published_instance(agent_id)
         # 1.5) 变量覆盖（可选；best-effort，实例未加载/变量名缺失都不阻断建会话）
         overrides: dict[str, Any] | None = None
         if variables:
@@ -239,6 +242,33 @@ class SessionService:
         await self._runtime.load_agent(instance_id, suffixed)
         self._draft_loaded[instance_id] = fingerprint
 
+    async def _ensure_published_instance(self, agent_id: str) -> None:
+        """确保 published agent 已在 runtime 加载（未加载则按最新 published 定义补加载）。
+
+        背景（2026-10-21）：runtime 启动改为**零预加载**（HTTP ready 后后台加载），且
+        runtime 重启会清空 transient 的已加载实体——首次建会话/发消息时 agent 可能尚未
+        加载。parlant `app_modules.sessions.create` 会 `read_agent`，未加载则
+        ItemNotFoundError。此处幂等：已加载直接返回；未加载从定义层取最新 published
+        定义推给 runtime。加载失败**显式抛出**（建会话需要 agent，失败应阻断而非静默）。
+        """
+        if not self._agent_repo:
+            raise ValueError(f"agent '{agent_id}' 无定义层可加载（agent_repo 未配置）")
+        loaded_in_runtime = False
+        try:
+            loaded_in_runtime = agent_id in {
+                a.get("agent_id")
+                for a in (await self._runtime.list_loaded()).get("agents", [])
+            }
+        except Exception:  # noqa: BLE001 - 查不到则按未加载处理（走 load，失败会显式抛）
+            loaded_in_runtime = False
+        if loaded_in_runtime:
+            return
+        doc = await self._agent_repo.get_published(agent_id)
+        if not doc:
+            raise ValueError(f"agent '{agent_id}' 没有已发布定义可加载")
+        definition = dict(doc["definition"])
+        await self._runtime.load_agent(agent_id, definition)
+
     async def _release_draft_instance(self, agent_id: str) -> None:
         """无活跃草稿会话时立即卸载 @draft 实例。"""
         instance_id = f"{agent_id}{self.DRAFT_SUFFIX}"
@@ -352,7 +382,14 @@ class SessionService:
             return
         instance = (ledger or {}).get("agent_instance_id")
         agent_id = (ledger or {}).get("agent_id")
-        if not instance or not agent_id or not instance.endswith(self.DRAFT_SUFFIX):
+        if not instance or not agent_id:
+            return
+        if not instance.endswith(self.DRAFT_SUFFIX):
+            # published 兜底：runtime 重启或后台加载未完成 → 按需补加载（幂等）
+            try:
+                await self._ensure_published_instance(agent_id)
+            except Exception as exc:  # noqa: BLE001 - 补加载失败不阻断转发（runtime 会回 404）
+                self._note_ledger_error(session_id, exc)
             return
         # 不能因 _draft_sessions 缓存而跳过：_ensure_draft_instance 内部会向 runtime
         # list_loaded 确认真实加载状态（runtime 重启会清空 @draft；仅靠本地缓存会误判

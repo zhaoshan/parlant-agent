@@ -79,15 +79,16 @@ async def login(body: LoginBody) -> LoginResponse:
         raise HTTPException(resp.status_code, detail or f"IAM 返回 {resp.status_code}")
 
     data = resp.json()
-    token = data.get("access_token") or data.get("token")
+    payload = data.get("data") or data  # IAM 统一信封：透出 data（兼容未套信封响应）
+    token = payload.get("access_token") or payload.get("token")
     if not token:
         raise HTTPException(502, "IAM 返回成功但缺 access_token")
     return LoginResponse(
         access_token=token,
-        token_type=data.get("token_type") or "bearer",
-        expires_in=data.get("expires_in"),
-        user=data.get("user") or None,
-        refresh_token=data.get("refresh_token"),
+        token_type=payload.get("token_type") or "bearer",
+        expires_in=payload.get("expires_in"),
+        user=payload.get("user") or None,
+        refresh_token=payload.get("refresh_token"),
     )
 
 
@@ -118,15 +119,16 @@ async def refresh(body: RefreshBody) -> LoginResponse:
             pass
         raise HTTPException(resp.status_code, detail or f"IAM 返回 {resp.status_code}")
     data = resp.json()
-    token = data.get("access_token") or data.get("token")
+    payload = data.get("data") or data  # IAM 统一信封：透出 data（兼容未套信封响应）
+    token = payload.get("access_token") or payload.get("token")
     if not token:
         raise HTTPException(502, "IAM 返回成功但缺 access_token")
     return LoginResponse(
         access_token=token,
-        token_type=data.get("token_type") or "bearer",
-        expires_in=data.get("expires_in"),
-        user=data.get("user") or None,
-        refresh_token=data.get("refresh_token"),
+        token_type=payload.get("token_type") or "bearer",
+        expires_in=payload.get("expires_in"),
+        user=payload.get("user") or None,
+        refresh_token=payload.get("refresh_token"),
     )
 
 

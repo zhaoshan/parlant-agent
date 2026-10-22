@@ -39,16 +39,22 @@ class RuntimeClient:
         self._timeout = timeout
         self._token = internal_token
 
-    def _client(self, timeout: float | None = None) -> httpx.AsyncClient:
+    def _client(self, timeout: float | None = None, *, no_timeout: bool = False) -> httpx.AsyncClient:
         """构造 httpx 客户端：trust_env=False 直连（服务间 127.0.0.1 不可被系统代理劫持），
         统一带 `X-Internal-Token`（doc09 §4.4 runtime 内部鉴权；未配置则不带头——runtime
-        若启用了内部鉴权会以 401 拒绝，立即暴露两边 .env 的 INTERNAL_TOKEN 不一致）。"""
+        若启用了内部鉴权会以 401 拒绝，立即暴露两边 .env 的 INTERNAL_TOKEN 不一致）。
+
+        `no_timeout=True` 表示**无读超时**（SSE 长轮询用——runtime 在 wait_for_data 内
+        无新事件会保持流，普通超时会误杀）；与 `timeout=None` 区分开：
+        `timeout=None` 仍回落默认 `self._timeout`，避免历史调用误以为"无超时"。
+        """
         headers: dict[str, str] = {}
         if self._token:
             headers["X-Internal-Token"] = self._token
+        effective_timeout = None if no_timeout else (timeout if timeout is not None else self._timeout)
         return httpx.AsyncClient(
             trust_env=False,
-            timeout=timeout if timeout is not None else self._timeout,
+            timeout=effective_timeout,
             headers=headers,
         )
 
@@ -197,7 +203,10 @@ class RuntimeClient:
             params["source"] = source
         if kinds:
             params["kinds"] = kinds
-        async with self._client(timeout=None) as client:
+        # no_timeout=True：SSE 长轮询必须无读超时（runtime 在 wait_for_data 内无新事件
+        # 会保持流几十秒；历史用 timeout=None 会被 _client 吞成默认 30s → ReadTimeout
+        # → 中继断 → 前端 EventSource 反复重连，见 2026-10-21 排查）。
+        async with self._client(no_timeout=True) as client:
             async with client.stream(
                 "GET", f"{self._base}/sessions/{session_id}/events", params=params
             ) as resp:

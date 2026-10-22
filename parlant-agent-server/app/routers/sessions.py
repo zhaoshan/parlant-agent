@@ -244,7 +244,13 @@ async def stream_events(
     return StreamingResponse(
         _relay_with_recording(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+        # no-transform：明确禁止代理（含 Cloudflare 边缘/tunnel）对 SSE 流做 gzip/缓冲
+        # 转换——否则浏览器 EventSource 收不到逐块事件，直到流关闭才一次性吐出。
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

@@ -56,7 +56,9 @@ class TokenVersionGuard:
         if resp.status_code != 200:
             logger.warning("[authz] IAM 版本点查非 200: %s %s", resp.status_code, resp.text[:120])
             raise RuntimeError(f"IAM 版本校验返回 {resp.status_code}")
-        items = (resp.json().get("items") or [])
+        body = resp.json()
+        payload = body.get("data") or body  # IAM 统一信封：透出 data（兼容未套信封响应）
+        items = (payload.get("items") or [])
         if not items:
             return  # IAM 未见该成员：token 已过 JWKS 验签，放行避免误伤（tombstone 由 IAM 显式下发）
         current = int(items[0].get("version", 0))

@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # 基础设施；必需：.env 的 MONGO_URI / QDRANT_URL
     mongo_uri: str
     qdrant_url: str
+    # 阶段5 §5.7 会话状态外置：session/customer/context_variable store 的共享 Mongo URI（缺省复用
+    # mongo_uri——同一 Mongo 服务器上按 store 分库 parlant_sessions/parlant_customers/parlant_context_variables）；
+    # 生产可单独指定会话存储集群。⚠️ 切到 Mongo 后既有 parlant-data/sessions.json 历史会话无法找回
+    session_store_uri: str = ""
 
     # 服务（p.Server 默认端口是 8800）
     # 生产：host 默认 127.0.0.1（仅内网回环，doc09 §4.4 收紧；需跨机联调时用 env 显式指定

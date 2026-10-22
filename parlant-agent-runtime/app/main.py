@@ -32,6 +32,8 @@ from app.observability import configure_engine_hooks, install_observability
 from app.routers.app_setup import configure_api
 from app.services import get_runtime, init_runtime
 from app.services.agent_loader import load_definition
+from app.utils.atomic_json_file import install_atomic_json_file_write
+from app.utils.journey_hash_stable import install_stable_journey_hash
 from app.utils.observability import configure_langfuse_otel
 
 
@@ -79,10 +81,44 @@ async def _load_published_agents() -> list[str]:
     return loaded
 
 
+async def _load_published_agents_after_ready(server: p.Server) -> None:
+    """启动后待 HTTP ready 再**后台**加载 published agents，评估不阻塞启动。
+
+    背景（2026-10-21）：启动预加载会让 `__aexit__` 的 `_process_evaluations` 在
+    `async with p.Server` 块体结束后全量评估已注册旅程（SiliconFlow 实测 10-24 分钟），
+    启动被拖死；且 SDK/loader 双路径重复评估。改为：块体内**不加载**（评估表空 →
+    __aexit__ 秒回 → Server 即时 ready）→ 等 `server.ready()` 后再后台加载；
+    旅程评估走 loader 缓存路径（命中即秒回，miss 慢评不阻塞任何人）。
+    首个请求若早于后台加载完成，由 server 侧 `_ensure_published_instance` 按需补加载。
+    """
+    try:
+        await server.ready.wait()  # server.ready 是 property → Event；.wait() 是协程
+    except Exception as exc:  # noqa: BLE001 - 等不到 ready 就放弃后台加载
+        print(f"⚠️ 等待 server ready 失败，跳过后台加载：{type(exc).__name__}: {exc}")
+        return
+    try:
+        loaded = await _load_published_agents()
+        print(f"✅ 后台加载 published agents 完成：{loaded}")
+    except Exception as exc:  # noqa: BLE001 - 后台加载失败不阻断已就绪的服务
+        print(f"⚠️ 后台加载 published agents 失败：{type(exc).__name__}: {exc}")
+
+
 async def main() -> None:
     settings = get_settings()
+    # 评估缓存两个 runtime 侧 patch（2026-10-21，均须在 p.Server 装配前安装）：
+    # ① 根治 evaluation_cache.json 截断（SDK 非原子写 + kill -9 → 0 字节被静默当空缓存）；
+    # ② journey 哈希稳定签名（排除随机 edge id，重启命中缓存，不再每次重评估）。
+    install_atomic_json_file_write()
+    install_stable_journey_hash()
     # 在 p.Server 进入前派生 OTEL_* → Parlant 的 OpenTelemetryTracer 由此导出到 langfuse。
     configure_langfuse_otel(settings)
+
+    # 阶段5 §5.7 会话状态外置：session/customer/context_variable 从本地 json 切**共享 Mongo**。
+    # p.Server 的 store 支持 mongo 连接串（sdk.py make_persistable_store → MongoDocumentDatabase，
+    # 各 store 独立库 parlant_sessions / parlant_customers / parlant_context_variables）；
+    # 多 pod 指向同一 Mongo 即可任一 pod 接管任一会话（可水平扩展 / 故障转移的基础）。
+    # ⚠️ 启用前已存在的 parlant-data/sessions.json 历史会话无法找回，启用后新建的持续可恢复。
+    store_uri = settings.session_store_uri or settings.mongo_uri
 
     async with p.Server(
         host=settings.host,
@@ -93,20 +129,20 @@ async def main() -> None:
         # 观测 hooks：journey.progress / process 根 span I/O（替代 parlant 源码插桩，
         # 见 app/observability/hooks）。configure_hooks 在 __aenter__ 装配期被调用。
         configure_hooks=configure_engine_hooks,
-        # 阶段3.3 修复：会话/客户默认 transient（重启即失，历史会话继续问答报
-        # "Session not found"）。改 "local" 持久化到 parlant-data/sessions.json、
-        # customers.json（事件随会话一起落盘）；agent 实体仍启动时从 Mongo 重建。
-        # 注意：启用前已存在的历史会话（在旧内存态）无法找回，启用后新建的可持续。
-        session_store="local",
-        customer_store="local",
+        session_store=store_uri,
+        customer_store=store_uri,
+        variable_store=store_uri,
     ) as server:
-        # 阶段3.2：装配 runtime（registry），从 server 拉取 published 定义加载。
-        # 退出 async with 块时，__aexit__ 会自动启动 HTTP 服务并阻塞直至被信号中断。
+        # 阶段3.2：装配 runtime（registry）。
+        # ⚠️ 启动**不预加载** agent：块体内零实体 → `__aexit__` 的 `_process_evaluations`
+        #    遍历空评估表秒回 → Server 即时 ready；published agents 由下方后台任务在
+        #    HTTP ready 后加载（评估走 loader 缓存路径）。首请求早于后台加载完成时，
+        #    server 侧 `_ensure_published_instance` 会按需补加载（幂等）。
         await init_runtime(server)
         # 观测/模型适配集中装配（litellm OTel 回调 + DeepSeek reasoning patch，幂等）
         install_observability()
-        loaded = await _load_published_agents()
-        print(f"✅ parlant-agent-runtime 已装配，加载 {len(loaded)} 个 Agent：{loaded}")
+        asyncio.create_task(_load_published_agents_after_ready(server))
+        print("✅ parlant-agent-runtime 已装配（零预加载），Server ready 后后台加载 agents")
 
 
 if __name__ == "__main__":
