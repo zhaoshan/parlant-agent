@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import quote
 
+import base64
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
@@ -64,7 +65,9 @@ async def login(body: LoginBody) -> LoginResponse:
         try:
             resp = await client.post(
                 settings.iam_token_url,
-                json={"username": body.username, "password": body.password},
+                # IAM 密码字段线上 base64（PasswordCodecs 约定，docs/user-manual/05）：编码非加密，机密性由 TLS 承担
+                json={"username": body.username,
+                      "password": base64.b64encode(body.password.encode("utf-8")).decode("ascii")},
             )
         except httpx.HTTPError as exc:
             raise HTTPException(502, f"IAM 不可达：{type(exc).__name__}: {exc}") from None
