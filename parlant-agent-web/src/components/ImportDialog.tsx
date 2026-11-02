@@ -40,7 +40,10 @@ export default function ImportDialog({ onClose, onCreated }: Props) {
 
   const errors = issues?.filter((i) => i.level === 'error') ?? []
   const warnings = issues?.filter((i) => i.level === 'warning') ?? []
-  const canImport = !!text.trim() && issues !== null && errors.length === 0 && !busy
+  // 点击即「校验 + 导入」单步：doImport 内重新 parseDefinitionJson，error 阻断并列出定位、
+  // warning 放行；故这里只需文本非空且无 error（issues 为 null 时尚未校验，errors=[] 不阻塞）。
+  // ⚠️ 不能要求 issues !== null——issues 只在 doImport（按钮点击）里赋值，那样按钮永远置灰。
+  const canImport = !!text.trim() && errors.length === 0 && !busy
 
   const doImport = async () => {
     const r = parseDefinitionJson(text)
