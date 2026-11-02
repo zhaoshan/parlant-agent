@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -33,10 +34,27 @@ from parlant.core.relationships import (
     RelationshipStore,
 )
 
+from app.config import get_settings
 from app.models.definition import AgentDefinition, GuidelineDef, JourneyDef
+from app.services import eval_status
 from app.services.builtin_tools import BUILTIN_TOOLS, resolve_tool, set_runtime_services
+from app.utils.eval_quality import check_journey
 
 logger = structlog.get_logger()
+
+# 评估模型护栏（2026-11 评估管线加固）：评估元数据只能由验证过的模型产出。SDK 只有一个
+# NLP 服务、评估生成器全部自动装配到它，plumbing 级"评估/对话双模型"在不改 parlant 源码的
+# 前提下不可行——故 fail-closed：缓存 miss 且当前模型未验证 → 拒绝评估（blocked）+ 响亮告警，
+# 宁可不评也不让幻觉元数据落缓存。缓存热（evaluation_cache 命中）时模型无关、对话随意换。
+PROVEN_EVAL_MODEL_MARKERS = ("deepseek-ai/DeepSeek-V4-Flash",)
+
+
+def _eval_model_proven() -> bool:
+    """当前对话模型是否在评估验证名单（settings.eval_model_guard=off 时恒通过）。"""
+    if not get_settings().eval_model_guard:
+        return True
+    model = os.getenv("LITELLM_PROVIDER_MODEL_NAME", "")
+    return any(marker in model for marker in PROVEN_EVAL_MODEL_MARKERS)
 
 _COMPOSITION_MODES = {
     "fluid": p.CompositionMode.FLUID,
@@ -134,7 +152,7 @@ class AgentLoader:
             guideline_ids = await self._build_guidelines(agent, definition, canrep_map, journey_map)
             await self._build_observations(agent, definition, canrep_map, journey_map)
             await self._build_relationships(agent, definition, guideline_ids, set(journey_map))
-            self._evaluate_journeys_now(list(journey_map.values()))
+            self._evaluate_journeys_now(agent_def.id, list(journey_map.values()))
             # 指南元数据同样需要后台评估（SDK __aexit__ 零预加载后不再覆盖，见方法注释）
             self._evaluate_guidelines_now()
         except Exception:
@@ -143,7 +161,7 @@ class AgentLoader:
             raise
         return agent
 
-    def _evaluate_journeys_now(self, journeys: list[p.Journey]) -> None:
+    def _evaluate_journeys_now(self, instance_id: str, journeys: list[p.Journey]) -> None:
         """热加载旅程**后台评估**并应用节点元数据（journey_node.reachable_follow_ups 等）。
 
         背景：SDK 的评估-应用（_process_evaluations → _apply_single_evaluation）只在
@@ -156,11 +174,13 @@ class AgentLoader:
         注意**必须后台化**：旅程评估是逐节点多次 LLM 调用（实测可达数分钟），
         阻塞会拖住 load 响应/会话创建。评估完成前 fork 暂不可推进（entry/普通节点
         不受影响）；完成时打印日志。评估失败仅影响分叉推进，不阻断加载。
+        评估状态登记到 eval_status（模拟对话门禁 + eval_quality 语义质检，2026-11）。
         """
+        eval_status.mark_all_pending(instance_id, [str(j.id) for j in journeys])
         for journey in journeys:
-            asyncio.create_task(self._evaluate_journey(journey))
+            asyncio.create_task(self._evaluate_journey(instance_id, journey))
 
-    async def _evaluate_journey(self, journey: p.Journey) -> None:
+    async def _evaluate_journey(self, instance_id: str, journey: p.Journey) -> None:
         # —— 评估诊断日志（2026-09-27 排查草稿热加载评估）：哈希 + cache 命中预判 + 用时 + 分叉数 ——
         import time as _time
 
@@ -181,6 +201,18 @@ class AgentLoader:
             f"[eval诊断] 旅程评估开始 id={journey.id} title={journey.title} "
             f"hash={(_hash or '?')[:8]} cache命中预判={cache_hit}"
         )
+        # 模型护栏（fail-closed，2026-11）：缓存 miss 且当前对话模型未验证 → 拒绝评估。
+        # 防幻觉元数据落缓存（10-21 事故）；缓存热时模型无关，对话模型可随意换。
+        if cache_hit is not True and not _eval_model_proven():
+            detail = (
+                f"评估缓存未命中且当前模型 '{os.getenv('LITELLM_PROVIDER_MODEL_NAME', '')}' 不在验证名单 "
+                f"{PROVEN_EVAL_MODEL_MARKERS}——拒绝评估以防幻觉元数据落缓存；请切回 SiliconFlow "
+                f"DeepSeek-V4-Flash 或预热 evaluation_cache 后重启"
+            )
+            eval_status.mark(instance_id, str(journey.id), "blocked", detail=detail)
+            logger.warning(f"[eval质检] 旅程评估被模型护栏阻止 id={journey.id}：{detail}")
+            print(f"⛔ 旅程评估被阻止（模型护栏）：{journey.title} ({journey.id})", flush=True)
+            return
         # 进度监控：评估是黑盒（实测 7-8 分钟无中间日志）；后台任务每 ~20s 读一次
         # _progress_for 打进度，避免"开始后长时间无输出像卡死"。
         monitor = asyncio.create_task(self._monitor_eval_progress("旅程", journey.id, t0))
@@ -195,6 +227,13 @@ class AgentLoader:
             await self._server._apply_single_evaluation(  # noqa: SLF001
                 "journey", journey.id, result
             )
+            # 语义质检（2026-11 评估管线加固）：确定性规则交叉比对，幻觉/残缺即时响亮告警，
+            # 并写入 eval_status 供 server 门禁与运维观测（不再静默卡死）。
+            quality_issues = check_journey(journey, result.node_properties or {})
+            eval_status.mark(instance_id, str(journey.id), "completed", issues=quality_issues)
+            for q in quality_issues:
+                logger.warning(f"[eval质检] 旅程评估元数据可疑 id={journey.id}：{q}")
+                print(f"⚠️ [eval质检] {journey.title} ({journey.id})：{q}", flush=True)
             fu_counts = {
                 nid: len(np.get("journey_node", {}).get("reachable_follow_ups") or [])
                 for nid, np in (result.node_properties or {}).items()
@@ -205,6 +244,7 @@ class AgentLoader:
             )
             print(f"✅ 旅程评估完成：{journey.title} ({journey.id})，分叉条件表已就绪", flush=True)
         except Exception as exc:  # noqa: BLE001 - 评估失败仅影响分叉推进
+            eval_status.mark(instance_id, str(journey.id), "failed", detail=f"{type(exc).__name__}: {exc}")
             logger.info(
                 f"[eval诊断] 旅程评估失败 id={journey.id} 用时={_time.monotonic() - t0:.1f}s "
                 f"错误={type(exc).__name__}: {exc}"
@@ -250,12 +290,30 @@ class AgentLoader:
         import time as _time
 
         t0 = _time.monotonic()
+        # 模型护栏（同旅程，fail-closed）：缓存 miss 且模型未验证 → 拒绝评估，防幻觉元数据落缓存
+        try:
+            _gh = self._server._evaluator._hash_guideline_evaluation_request(  # noqa: SLF001
+                args[1], args[2], False, True
+            )
+            _g_cached = await self._server._evaluator._guideline_collection.find_one(  # noqa: SLF001
+                {"id": {"$eq": _gh}}
+            )
+        except Exception:  # noqa: BLE001 - 预判失败按未命中处理，交护栏决定
+            _g_cached = None
+        if _g_cached is None and not _eval_model_proven():
+            logger.warning(
+                f"[eval质检] 指南评估被模型护栏阻止 id={guideline_id}"
+                f"（缓存未命中且模型 '{os.getenv('LITELLM_PROVIDER_MODEL_NAME', '')}' 未验证）"
+            )
+            return
         monitor = asyncio.create_task(self._monitor_eval_progress("指南", guideline_id, t0))
         try:
             result = await asyncio.wait_for(func(*args), timeout=900)
             await self._server._apply_single_evaluation(  # noqa: SLF001
                 "guideline", guideline_id, result
             )
+            if not (result.properties or {}):
+                logger.warning(f"[eval质检] 指南评估产出空元数据 id={guideline_id}")
             logger.info(
                 f"[eval诊断] 指南评估完成 id={guideline_id} 用时={_time.monotonic() - t0:.1f}s"
             )
@@ -305,6 +363,7 @@ class AgentLoader:
         if not await self._server.find_agent(id=agent_id):
             return False
         await self._delete_agent_entities(agent_id)
+        eval_status.drop_instance(agent_id)
         return True
 
     # ------------------------------------------------------------ 卸载（级联）

@@ -20,7 +20,7 @@ from parlant.core.context_variables import ContextVariableStore
 
 from app.config import get_settings
 from app.models import parse_definition
-from app.services import get_runtime
+from app.services import eval_status, get_runtime
 
 
 def _pkg_version(name: str) -> str:
@@ -55,6 +55,15 @@ async def configure_internal_api(app: FastAPI) -> None:
     async def list_loaded_agents() -> dict[str, Any]:
         rt = get_runtime()
         return {"agents": [{"agent_id": a, "loaded": True} for a in rt.registry.list()]}
+
+    @app.get("/internal/agents/{agent_id}/eval-status", dependencies=[Depends(require_internal_token)])
+    async def agent_eval_status(agent_id: str) -> dict[str, Any]:
+        """评估就绪状态（2026-11 评估管线加固）：server 建模拟会话前的门禁查询。
+
+        ready = 该实例全部旅程评估 completed（无旅程=就绪）；逐旅程给出
+        pending/completed/failed/blocked + 语义质检 issues（completed 也可能带 issues 告警）。
+        """
+        return eval_status.get_status(agent_id)
 
     @app.post("/internal/agents/{agent_id}/load", dependencies=[Depends(require_internal_token)])
     async def load_agent(agent_id: str, request: Request) -> dict[str, Any]:
