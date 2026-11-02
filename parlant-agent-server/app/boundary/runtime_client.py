@@ -73,6 +73,17 @@ class RuntimeClient:
             resp.raise_for_status()
             return resp.json()
 
+    async def eval_status(self, agent_id: str) -> dict[str, Any]:
+        """查询 runtime 侧某实例的评估就绪状态（2026-11 评估管线加固，模拟对话门禁）。
+
+        返回 {ready, journeys: {journey_id: {status, issues, detail}}, summary}；
+        ready=False 时 journeys 里的 pending/failed/blocked 即拦截原因。
+        """
+        async with self._client() as client:
+            resp = await client.get(f"{self._base}/internal/agents/{agent_id}/eval-status")
+            resp.raise_for_status()
+            return resp.json()
+
     async def runtime_info(self) -> dict[str, Any]:
         """运行时信息（模型/版本，供设置页展示；runtime 不可达时调用方应兜底）。"""
         async with self._client() as client:

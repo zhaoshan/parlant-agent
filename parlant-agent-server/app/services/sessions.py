@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+from fastapi import HTTPException
 
 from app.boundary import RuntimeClient
 from app.repository import AgentDefinitionRepository, SessionMessageRepository, UserSessionRepository
@@ -112,6 +113,12 @@ class SessionService:
             # 启动零预加载后，首次建会话需确保 published agent 已加载进 runtime
             # （parlant create_session 会 read_agent，未加载抛 ItemNotFoundError）
             await self._ensure_published_instance(agent_id)
+        # 模拟对话门禁（2026-11 评估管线加固）：版本实例的旅程评估未就绪（评估中/失败/
+        # 被模型护栏阻止）时拒绝建会话——分叉条件表缺失会让旅程静默卡死（10-21 投顾
+        # 卡节点 3 事故）。仅拦截 simulate；online 线上不拦（避免评估抖动影响真实用户，
+        # 退化由 eval_quality 质检告警暴露）。
+        if source == "simulate":
+            await self._assert_eval_ready(instance_id)
         # 1.5) 变量覆盖（可选；best-effort，实例未加载/变量名缺失都不阻断建会话）
         overrides: dict[str, Any] | None = None
         if variables:
@@ -268,6 +275,47 @@ class SessionService:
             raise ValueError(f"agent '{agent_id}' 没有已发布定义可加载")
         definition = dict(doc["definition"])
         await self._runtime.load_agent(agent_id, definition)
+
+    async def _assert_eval_ready(self, instance_id: str) -> None:
+        """模拟对话门禁：实例旅程评估全部 completed 才放行，否则 409 列出拦截原因。"""
+        try:
+            st = await self._runtime.eval_status(instance_id)
+        except Exception as exc:  # noqa: BLE001 - 状态查询失败降级放行，不阻断模拟
+            print(f"[session-service] 评估状态查询失败（降级放行）{instance_id}: {exc}")
+            return
+        if st.get("ready", True):
+            return
+        journeys = st.get("journeys") or {}
+        parts: list[str] = []
+        for status, label in (("pending", "评估中"), ("failed", "评估失败"), ("blocked", "被模型护栏阻止")):
+            n = sum(1 for v in journeys.values() if v.get("status") == status)
+            if n:
+                parts.append(f"{n} 个旅程{label}")
+        hint = ""
+        if any(v.get("status") == "blocked" for v in journeys.values()):
+            hint = "；当前模型未通过评估验证——请切回 SiliconFlow DeepSeek-V4-Flash 或预热 evaluation_cache"
+        elif any(v.get("status") == "pending" for v in journeys.values()):
+            hint = "；评估仍在后台进行，请稍后重试"
+        raise HTTPException(
+            status_code=409,
+            detail=f"该版本评估未就绪，暂不能发起模拟对话：{'、'.join(parts)}{hint}",
+        )
+
+    async def eval_status(self, agent_id: str, mode: str = "published") -> dict[str, Any]:
+        """评估就绪状态查询（前端模拟弹窗轮询，2026-11 评估管线加固）。
+
+        先确保实例已加载（草稿含指纹比对——草稿变更会触发重载重新评估），再查 runtime
+        逐旅程状态；任何环节失败返回 ready=False + error 而非 500（轮询友好）。
+        """
+        instance_id = f"{agent_id}{self.DRAFT_SUFFIX}" if mode == "draft" else agent_id
+        try:
+            if mode == "draft":
+                await self._ensure_draft_instance(agent_id)
+            else:
+                await self._ensure_published_instance(agent_id)
+            return await self._runtime.eval_status(instance_id)
+        except Exception as exc:  # noqa: BLE001 - 轮询查询永不 500
+            return {"agent_id": instance_id, "ready": False, "journeys": {}, "error": str(exc)}
 
     async def _release_draft_instance(self, agent_id: str) -> None:
         """无活跃草稿会话时立即卸载 @draft 实例。"""

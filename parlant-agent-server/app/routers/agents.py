@@ -46,6 +46,21 @@ async def create_agent(
         raise HTTPException(status_code=409 if strict else 422, detail=str(exc)) from exc
 
 
+@router.get("/{agent_id}/eval-status")
+async def agent_eval_status(
+    agent_id: str,
+    request: Request,
+    mode: str = "published",
+    ctx: AuthorizationContext = Depends(require(AGENT_READ)),
+) -> dict[str, Any]:
+    """评估就绪状态（2026-11 评估管线加固）：模拟弹窗轮询用。
+
+    ready = 该版本实例（published / @draft）全部旅程评估 completed；
+    未就绪时 journeys 给出 pending/failed/blocked 明细与原因（blocked=模型护栏）。
+    """
+    return await request.app.state.session_service.eval_status(agent_id, mode)
+
+
 @router.get("/{agent_id}")
 async def get_agent(
     agent_id: str,

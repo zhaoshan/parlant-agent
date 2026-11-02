@@ -491,6 +491,14 @@ interface OverrideEntry {
   value: unknown
 }
 
+/** 评估就绪状态（模拟对话门禁轮询展示） */
+interface EvalInfo {
+  state: 'checking' | 'ready' | 'pending' | 'blocked' | 'failed' | 'error'
+  total: number
+  done: number
+  message: string
+}
+
 function NewConversationDialog(props: {
   agents: AgentInfo[]
   userId: string
@@ -510,6 +518,47 @@ function NewConversationDialog(props: {
   const [varMeta, setVarMeta] = useState<AgentVariable[]>([])
   const [varLoading, setVarLoading] = useState(false)
   const [overrides, setOverrides] = useState<Record<string, OverrideEntry>>({})
+
+  // 评估就绪状态（2026-11 评估管线加固）：草稿首跑/草稿变更后评估需数分钟——轮询展示
+  // 进度（5s），未就绪禁用开始按钮；就绪自动放行。切 Agent/切模式/关弹窗时重置。
+  const [evalInfo, setEvalInfo] = useState<EvalInfo>({ state: 'checking', total: 0, done: 0, message: '' })
+  const refreshEval = useCallback(async () => {
+    if (!agentId) return
+    try {
+      const st = await agentsApi.evalStatus(agentId, mode)
+      if (st.error) {
+        setEvalInfo({ state: 'error', total: 0, done: 0, message: st.error })
+        return
+      }
+      const js = Object.values(st.journeys || {})
+      if (st.ready) {
+        setEvalInfo({ state: 'ready', total: js.length, done: js.length, message: '' })
+        return
+      }
+      const done = js.filter((j) => j.status === 'completed').length
+      const blocked = js.find((j) => j.status === 'blocked')
+      const failed = js.find((j) => j.status === 'failed')
+      setEvalInfo({
+        state: blocked ? 'blocked' : failed ? 'failed' : 'pending',
+        total: js.length,
+        done,
+        message: blocked
+          ? blocked.detail || '当前模型未通过评估验证'
+          : failed
+            ? `旅程评估失败：${failed.detail || '未知错误'}`
+            : '旅程分叉条件表生成中（模型逐节点评估，通常需 1-10 分钟），就绪后自动放行',
+      })
+    } catch (e) {
+      setEvalInfo({ state: 'error', total: 0, done: 0, message: String(e) })
+    }
+  }, [agentId, mode])
+
+  useEffect(() => {
+    setEvalInfo({ state: 'checking', total: 0, done: 0, message: '' })
+    refreshEval()
+    const timer = setInterval(refreshEval, 5000)
+    return () => clearInterval(timer)
+  }, [refreshEval])
 
   // 切换 Agent / 模式时拉取该 agent 对应版本定义里的变量清单（name→type/default 供输入控件）。
   // mode=draft → 草稿定义（无草稿回落已发布）；mode=published → 已发布——与建会话绑定的实例一致。
@@ -596,7 +645,13 @@ function NewConversationDialog(props: {
       }
       onCreated(res.session.id)
     } catch (err) {
-      alert(`创建会话失败：${err}`)
+      const msg = String(err)
+      if (msg.includes('评估未就绪')) {
+        // 竞态（评估完成瞬间点了按钮）→ 刷新评估态，就绪后按钮自动恢复可点
+        refreshEval()
+      } else {
+        alert(`创建会话失败：${msg}`)
+      }
     } finally {
       setBusy(false)
     }
@@ -654,6 +709,35 @@ function NewConversationDialog(props: {
           ))}
         </div>
 
+        {/* 评估就绪横幅：未就绪时说明原因并禁用开始按钮（草稿首跑/变更后评估需数分钟） */}
+        {evalInfo.state !== 'ready' && (
+          <div
+            className={`mt-3 flex items-start gap-2 rounded-lg border p-2.5 text-[11.5px] leading-relaxed ${
+              evalInfo.state === 'pending' || evalInfo.state === 'checking'
+                ? 'border-[#FDE68A] bg-[var(--warning-weak)] text-[var(--warning)]'
+                : 'border-[#FECACA] bg-[#FEF2F2] text-[var(--danger)]'
+            }`}
+          >
+            {(evalInfo.state === 'pending' || evalInfo.state === 'checking') && (
+              <span className="mt-0.5 h-3 w-3 flex-none animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
+            )}
+            <div>
+              <b>
+                {evalInfo.state === 'checking'
+                  ? '检查评估状态…'
+                  : evalInfo.state === 'pending'
+                    ? `评估进行中 ${evalInfo.done}/${evalInfo.total} 旅程`
+                    : evalInfo.state === 'blocked'
+                      ? '评估被模型护栏阻止'
+                      : evalInfo.state === 'failed'
+                        ? '旅程评估失败'
+                        : '评估状态查询失败'}
+              </b>
+              <div className="mt-0.5 opacity-90">{evalInfo.message}</div>
+            </div>
+          </div>
+        )}
+
         <div className="mt-4 text-[12.5px] font-semibold text-[var(--ink-2)]">2 · 客户身份</div>
         <div className="mt-2 flex flex-col gap-2.5">
           <label className="flex items-center gap-2 text-[12px]">
@@ -699,10 +783,18 @@ function NewConversationDialog(props: {
           <div className="flex-1" />
           <button
             className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[var(--primary)] px-4 text-[12.5px] font-medium text-white hover:bg-[#4338CA] disabled:opacity-60"
-            disabled={!agentId || busy}
+            disabled={
+              !agentId ||
+              busy ||
+              evalInfo.state === 'checking' ||
+              evalInfo.state === 'pending' ||
+              evalInfo.state === 'blocked' ||
+              evalInfo.state === 'failed' ||
+              evalInfo.state === 'error'
+            }
             onClick={start}
           >
-            {busy ? '创建中…' : '开始对话'}
+            {busy ? '创建中…' : evalInfo.state === 'pending' || evalInfo.state === 'checking' ? '等待评估完成…' : '开始对话'}
           </button>
         </div>
       </div>

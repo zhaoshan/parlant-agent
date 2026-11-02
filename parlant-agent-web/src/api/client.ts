@@ -89,6 +89,18 @@ export const agentsApi = {
   /** 版本历史（不含定义体，列表用） */
   versions: (id: string) =>
     request<{ agent_id: string; versions: AgentVersionInfo[] }>(`/api/agents/${id}/versions`).then((r) => r.versions),
+  /** 评估就绪状态（模拟对话门禁轮询）：ready=false 时 journeys 附 pending/failed/blocked 明细 */
+  evalStatus: (
+    id: string,
+    mode: 'draft' | 'published'
+  ) =>
+    request<{
+      ready: boolean
+      agent_id: string
+      journeys: Record<string, { status: string; issues: string[]; detail: string }>
+      summary: Record<string, number>
+      error?: string
+    }>(`/api/agents/${id}/eval-status?mode=${mode}`),
   create: (definition: unknown, strict: boolean = false) =>
     request<{ agent_id: string; version: string; status: string }>(`/api/agents${strict ? '?strict=1' : ''}`, {
       method: 'POST',
