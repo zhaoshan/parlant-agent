@@ -9,7 +9,7 @@ from fastapi import FastAPI
 
 from app.config import get_settings
 from app.routers.engine_control import configure_internal_api
-from app.utils.observability import instrument_fastapi
+from app.extensions.observability.langfuse_otel import instrument_fastapi
 
 
 async def configure_api(app: FastAPI) -> None:

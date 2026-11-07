@@ -69,10 +69,10 @@ parlant-agent/
 
 ## 五、关键约定与陷阱（务必先读）
 
-1. **Parlant 源码本地安装**：`parlant` 经 `[tool.uv.sources]` 指向 `../parlant` editable 安装（工作区外独立 repo）。**我们对 parlant 源码改动过 3 次提交、共 8 个文件**（相对原生 `ea737442`，git 可查 diff），通盘核对见 `docs/06-dev-process/05` §1。**2026-09-28 已落地去 hack 化**：
+1. **Parlant 源码本地安装**：`parlant` 经 `[tool.uv.sources]` 指向 `../parlant` editable 安装（工作区外独立 repo）。**本地适配已挤压为 1 个提交（`cd7183a4`）、3 个文件**（基线 `ea737442`：litellm_service 惰性导入 Jina / opentelemetry console 开关 / sdk.py 评估任务名解析 bugfix），**升级平移 SOP 见 `docs/04-execution-chain/04-parlant升级平移指南.md`**。**2026-09-28 已落地去 hack 化**：
    - **保留的必需 hack（勿还原）**：`litellm_service.py`（惰性导入 `JinaAIEmbedder`，Intel 机器无 torch wheel）、`opentelemetry.py`（console exporter 加开关默认关，`PARLANT_OTEL_CONSOLE_EXPORTER=1` 才开；**timeout 是 runtime 配置非源码 hack**）。
    - **上游 bug 修复（应贡献上游）**：`sdk.py` 评估任务名解析（`split("_")[-1]` → `removeprefix`，否则含下划线 id 启动崩溃）。
-   - **观测插桩已全部还原**（git checkout 5 文件：generation/engine/next_step/batch/entity_cq），功能迁入 **runtime `app/observability/`** 分 package：`otel/`（litellm OTel 回调 → gen_ai.* generation）、`hooks/`（EngineHooks journey.progress index:名称 + process 根 span I/O）、`patches/`（DeepSeek 关 reasoning 注入）、`labels/`（journey index→名称 BFS 复刻）。原 `[parlant-agent]` 前缀日志改由 hooks 输出。详见 `docs/06-dev-process/05`。
+   - **观测插桩已全部还原**（git checkout 5 文件：generation/engine/next_step/batch/entity_cq），功能迁入 runtime 分 package（**2026-11 按对 SDK 关系分类：A 类 patch → `app/patches/`、B 类扩展 → `app/extensions/`、C 类工具 → `app/utils/`**）：litellm patch（DeepSeek 关 reasoning + gen_ai.chat span）、EngineHooks（journey.progress index:名称 + process 根 span I/O）、langfuse_otel（OTEL 派生 + FastAPI instrument；litellm OTel 回调弃用）、journey_labels（index→名称 BFS 复刻）。原 `[parlant-agent]` 前缀日志改由 hooks 输出。详见 `docs/06-dev-process/05`。
 2. **定义层 ↔ 引擎实体 id**：加载器显式传旅程/状态 id（`jny_*`/`sta_*`，进全局存储）；**带 `@` 后缀的实例**（草稿 `{agent_id}@draft`）子实体 id 统一加后缀隔离，否则旅程 id 冲突报错、状态 id 静默覆盖。
 3. **热加载旅程必须后台补评估**：`reachable_follow_ups`（分叉条件表）只由 SDK 启动评估产出；热加载（publish/rollback/@draft）实体由 `AgentLoader` `asyncio.create_task` 后台逐旅程评估（缓存 `parlant-data/evaluation_cache.json`，实测可达 8 分钟，阻塞会拖死 load/会话创建）。评估完成前 fork 暂不可推进。**评估内容是评估时的模型生成的，可能静默残缺**（缺分支不报错、旅程跑偏但无 invalid condition id）——换模型/旅程结构变更后需质检分叉完整性，运维 SOP 见 `docs/06-dev-process/07-评估机制与evaluation-cache.md`。
 4. **服务间 502 陷阱**：本机 macOS 系统代理（`:7899`）+ httpx `trust_env` 默认读 → 127.0.0.1 请求被转代理。**runtime↔server 全部 httpx 客户端 `trust_env=False` 直连**；server 的 `load_agent` 超时单独 600s。

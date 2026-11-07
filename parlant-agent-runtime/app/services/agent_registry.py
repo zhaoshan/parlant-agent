@@ -14,7 +14,7 @@ from __future__ import annotations
 import parlant.sdk as p
 
 from app.models import AgentDefinition
-from app.services.agent_loader import AgentLoader
+from app.core import AgentLoader
 
 
 class AgentRegistry:

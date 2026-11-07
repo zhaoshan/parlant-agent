@@ -9,7 +9,7 @@ root→entry 先、再按 definition `states[].transitions` 顺序）。
 这里在 runtime 侧用**定义层数据**（`definition.journeys[].states[]/transitions/entry_node`）
 复刻同一 BFS，产出 ``{index: 名称}``。名称**优先取 `state.title`**（短标签，如「风险测评」），
 回退 `state.description`（与 loader 存进引擎的 `node.description = s.description or s.title`
-一致，见 agent_loader._build_journey），截断 12 字。
+一致，见 app/core/builder.py _build_journey），截断 12 字。
 
 > 不缓存：journey 节点数少（<20），每次 BFS 开销可忽略；且热更新同 id 改结构时免缓存失效问题。
 """

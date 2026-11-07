@@ -17,24 +17,24 @@ from app.services.agent_registry import AgentRegistry
 
 
 @dataclass
-class Runtime:
+class EngineRuntime:
     server: p.Server
     registry: AgentRegistry
 
 
-_RT: Runtime | None = None
+_RT: EngineRuntime | None = None
 
 
-async def init_runtime(server: p.Server) -> Runtime:
+async def init_runtime(server: p.Server) -> EngineRuntime:
     global _RT
-    _RT = Runtime(
+    _RT = EngineRuntime(
         server=server,
         registry=AgentRegistry(server),
     )
     return _RT
 
 
-def get_runtime() -> Runtime:
+def get_runtime() -> EngineRuntime:
     if _RT is None:
-        raise RuntimeError("Runtime 未初始化：init_runtime() 须在 p.Server __aenter__ 之后调用")
+        raise RuntimeError("EngineRuntime 未初始化：init_runtime() 须在 p.Server __aenter__ 之后调用")
     return _RT

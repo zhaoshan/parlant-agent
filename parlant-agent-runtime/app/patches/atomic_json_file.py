@@ -1,28 +1,23 @@
-"""JSONFileDocumentDatabase 非原子写 → 原子写（根治截断）。
+"""JSONFileDocumentDatabase 原子写（根治 kill -9 截断缓存文件）。
 
-背景（2026-10-21 定位）：SDK 的 `_save_data` 用 `mode="w"` **先截断再写**（非原子）——进程在
-写入窗口被 `kill -9`/崩溃会留下 0 字节/半截文件；而 `_load_raw_data` 把 0 字节文件**静默当空缓存**
-（`st_size==0 → {}`），下次启动"缓存消失 → 全量重评估"（评估缓存 / doc11 附录）。
+SDK `_save_data` 用 mode="w" 先截断再写（非原子），写入窗口被杀留 0 字节/半截文件；
+`_load_raw_data` 把 0 字节静默当空缓存 → 重启全量重评估。本 patch 换成临时文件 + fsync +
+os.replace（POSIX 原子替换），文件永远新旧完整其一；空文件读改打 warning（再发生可见）。
 
-根治：monkey-patch 成**原子写**——先写同目录临时文件 + fsync + `os.replace`（POSIX 原子替换），
-文件永远是"旧版完整"或"新版完整"，绝不出现半截/空文件。顺带把 `_load_raw_data` 的空文件分支
-改成打 warning（万一再发生也可见）。
-
-遵循项目"Parant 源码改动最小、hack 归 runtime 持有"（同 `app/utils/observability.py`）：不改
-parlant 源码，运行时装配期幂等安装。
+须在 p.Server 装配前幂等安装（入口 app.main.install_runtime_patches）。
 """
 
 from __future__ import annotations
 
+import structlog
 import json
-import logging
 import os
 from collections.abc import Mapping, Sequence
 from typing import Any
 
 import aiofiles
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 _PATCHED = False
 
@@ -57,6 +52,11 @@ def install_atomic_json_file_write() -> None:
         return
     from parlant.adapters.db.json_file import JSONFileDocumentDatabase
 
+    from app.patches.patch_guard import assert_anchor
+
+    assert_anchor(JSONFileDocumentDatabase, "_save_data", patch="atomic-json-file",
+                  hint="上游若已改原子写，可整包删除本 patch。")
+    assert_anchor(JSONFileDocumentDatabase, "_load_raw_data", patch="atomic-json-file")
     JSONFileDocumentDatabase._save_data = _atomic_save_data
     JSONFileDocumentDatabase._load_raw_data = _load_raw_data_with_warn
     _PATCHED = True

@@ -22,7 +22,7 @@ from parlant.core.engines.alpha.hooks import EngineHookResult, EngineHooks
 
 from app.services import get_runtime
 
-from app.observability.labels.journey_labels import JourneyLabelResolver
+from app.utils.journey_labels import JourneyLabelResolver
 
 _resolver = JourneyLabelResolver()
 

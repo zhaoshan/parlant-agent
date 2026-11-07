@@ -28,13 +28,28 @@ import parlant.sdk as p
 from app.boundary.policies import build_container
 from app.config import get_settings
 from app.models import parse_definition
-from app.observability import configure_engine_hooks, install_observability
+from app.extensions.observability.hooks import configure_engine_hooks
 from app.routers.app_setup import configure_api
 from app.services import get_runtime, init_runtime
-from app.services.agent_loader import load_definition
-from app.utils.atomic_json_file import install_atomic_json_file_write
-from app.utils.journey_hash_stable import install_stable_journey_hash
-from app.utils.observability import configure_langfuse_otel
+from app.core import load_definition
+from app.patches.atomic_json_file import install_atomic_json_file_write
+from app.patches.do_generate import install_litellm_patches
+from app.patches.eval_model_split import install_eval_model_split
+from app.patches.journey_hash_stable import install_stable_journey_hash
+from app.extensions.observability.langfuse_otel import configure_langfuse_otel
+
+
+def install_runtime_patches() -> None:
+    """统一安装全部 runtime → parlant SDK 补丁（A 类，app/patches/，全部幂等）。
+
+    唯一安装入口：**各包 `__init__.py` 不放安装逻辑**，新增 patch 时在此登记。
+    须在 p.Server 装配前完成——类级 monkey-patch 需在 SDK 注册循环等初始化
+    路径执行前生效；do_generate patch 同理（装配期只构造生成器、不触发生成）。
+    """
+    install_atomic_json_file_write()  # 评估缓存原子写（根治 kill -9 截断）
+    install_stable_journey_hash()     # 旅程评估稳定哈希（跨重启命中缓存）
+    install_eval_model_split()        # 评估/对话模型分流（EVAL_LITELLM_*）+ 模型护栏
+    install_litellm_patches()         # DeepSeek 关 reasoning（按 provider 路由）+ gen_ai span
 
 
 async def _load_published_agents() -> list[str]:
@@ -105,11 +120,8 @@ async def _load_published_agents_after_ready(server: p.Server) -> None:
 
 async def main() -> None:
     settings = get_settings()
-    # 评估缓存两个 runtime 侧 patch（2026-10-21，均须在 p.Server 装配前安装）：
-    # ① 根治 evaluation_cache.json 截断（SDK 非原子写 + kill -9 → 0 字节被静默当空缓存）；
-    # ② journey 哈希稳定签名（排除随机 edge id，重启命中缓存，不再每次重评估）。
-    install_atomic_json_file_write()
-    install_stable_journey_hash()
+    # 全部 SDK 补丁的统一安装入口（app/patches/，幂等；须在 p.Server 装配前完成）。
+    install_runtime_patches()
     # 在 p.Server 进入前派生 OTEL_* → Parlant 的 OpenTelemetryTracer 由此导出到 langfuse。
     configure_langfuse_otel(settings)
 
@@ -139,8 +151,8 @@ async def main() -> None:
         #    HTTP ready 后加载（评估走 loader 缓存路径）。首请求早于后台加载完成时，
         #    server 侧 `_ensure_published_instance` 会按需补加载（幂等）。
         await init_runtime(server)
-        # 观测/模型适配集中装配（litellm OTel 回调 + DeepSeek reasoning patch，幂等）
-        install_observability()
+        # 观测 hooks 与 SDK 补丁已在装配前统一安装（install_runtime_patches）；
+        # configure_hooks 在 __aenter__ 装配期由 p.Server 调用。
         asyncio.create_task(_load_published_agents_after_ready(server))
         print("✅ parlant-agent-runtime 已装配（零预加载），Server ready 后后台加载 agents")
 

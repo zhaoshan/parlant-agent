@@ -7,7 +7,7 @@
 
 因此 gen_ai.* 观测改走 **patches 模块的 `install_litellm_patches()`**（monkey-patch
 `LiteLLMSchematicGenerator.do_generate`，用 parlant tracer 开 span——parlant 自管 span
-生命周期，无上述问题，且与 process span 嵌套天然正确），见 `app/observability/patches/`。
+生命周期，无上述问题，且与 process span 嵌套天然正确），见 `app/patches/`。
 
 若未来 litellm 修复该问题，可恢复本模块：`install_litellm_otel()` 把
 `OpenTelemetry(tracer_provider=trace.get_tracer_provider())` 挂到 `litellm.callbacks`。
