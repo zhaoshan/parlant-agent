@@ -4,7 +4,7 @@ DB/向量库连接串（MONGO_URI / QDRANT_URL）不硬编码在代码里，必�
 提供（含凭据，不应入库）。缺键时 pydantic 启动即报错，便于发现配置缺失。
 
 Langfuse 三件套（public/secret key + base_url）放在工作区根目录 .env，
-由 pydantic 读入后，在 app.utils.observability.configure_langfuse_otel 里
+由 pydantic 读入后，在 app.extensions.observability.langfuse_otel.configure_langfuse_otel 里
 派生成 Parlant OpenTelemetryTracer 需要的 OTEL_* 环境变量。
 
 注意：Parlant 各适配器（litellm 等）用 os.getenv 直接读环境变量，
@@ -71,7 +71,7 @@ class Settings(BaseSettings):
     langfuse_secret_key: str | None = None
 
     # 评估模型护栏（2026-11 评估管线加固）：on=评估缓存 miss 且当前 LITELLM_PROVIDER_MODEL_NAME
-    # 不在验证名单（agent_loader.PROVEN_EVAL_MODEL_MARKERS，SiliconFlow DeepSeek-V4-Flash）时
+    # 不在验证名单（env EVAL_PROVEN_MODEL_MARKERS，逗号分隔，缺省 SiliconFlow DeepSeek-V4-Flash）时
     # 拒绝评估（blocked）——SDK 单 NLP 服务、plumbing 级"评估/对话双模型"不可行，故 fail-closed：
     # 宁可不评也不让幻觉元数据落缓存（10-21 投顾卡节点 3 事故）。缓存热时模型无关，对话随意换。
     eval_model_guard: bool = True
