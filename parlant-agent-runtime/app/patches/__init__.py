@@ -12,5 +12,6 @@
 - ``journey_hash_stable.py`` 旅程评估稳定哈希（跨重启命中缓存）
 - ``eval_model_split.py``  评估/对话模型分流（EVAL_LITELLM_*）+ 模型护栏
 - ``do_generate.py``       DeepSeek 关 reasoning（按 provider 路由）+ gen_ai.chat span
+- ``journey_eval_braces.py`` 旅程评估生成条件花括号转义（防模型抄录 `{var}` 致父节点 prompt format KeyError）
 - ``next_step.py``         预留占位（未启用）
 """

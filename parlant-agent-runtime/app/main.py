@@ -35,6 +35,7 @@ from app.core import load_definition
 from app.patches.atomic_json_file import install_atomic_json_file_write
 from app.patches.do_generate import install_litellm_patches
 from app.patches.eval_model_split import install_eval_model_split
+from app.patches.journey_eval_braces import install_journey_eval_braces_patches
 from app.patches.journey_hash_stable import install_stable_journey_hash
 from app.extensions.observability.langfuse_otel import configure_langfuse_otel
 
@@ -49,6 +50,7 @@ def install_runtime_patches() -> None:
     install_atomic_json_file_write()  # 评估缓存原子写（根治 kill -9 截断）
     install_stable_journey_hash()     # 旅程评估稳定哈希（跨重启命中缓存）
     install_eval_model_split()        # 评估/对话模型分流（EVAL_LITELLM_*）+ 模型护栏
+    install_journey_eval_braces_patches()  # 旅程评估生成条件含 {var} 致父节点 prompt format KeyError（agent-167c28 实测）
     install_litellm_patches()         # DeepSeek 关 reasoning（按 provider 路由）+ gen_ai span
 
 
