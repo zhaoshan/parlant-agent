@@ -156,6 +156,9 @@ export interface ToolDef {
   method?: string
   url?: string
   headers?: Record<string, string>
+  /** remote 专用：工具结果 → 变量自动回写（仅成功响应），{变量名: 结果取值路径}，
+   *  路径基于 {"status","data"} 点号寻址（如 data.orderStatus / data.items.0.code） */
+  variable_mappings?: Record<string, string>
   editable?: boolean
 }
 

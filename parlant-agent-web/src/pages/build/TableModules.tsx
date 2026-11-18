@@ -298,6 +298,9 @@ export function Tools() {
                 <F label="Headers（JSON）" hint={'固定请求头，如 {"Content-Type": "application/json"}'}>
                   <TextInput rows={2} mono value={JSON.stringify(t.headers ?? {}, null, 2)} onChange={(x) => { try { set({ headers: JSON.parse(x) }) } catch { /* 非法 JSON 不落 */ } }} />
                 </F>
+                <F label="结果回写变量（JSON）" hint={'仅成功响应时执行：{变量名: 结果取值路径}。路径基于 {"status","data"} 点号寻址，如 {"order_status": "data.orderStatus"}；写入 key=customer_id，失败/超时不写。配了即可摘掉变量上的工具绑定。'}>
+                  <TextInput rows={3} mono value={JSON.stringify(t.variable_mappings ?? {}, null, 2)} onChange={(x) => { try { set({ variable_mappings: JSON.parse(x) }) } catch { /* 非法 JSON 不落 */ } }} placeholder='{"order_status": "data.orderStatus"}' />
+                </F>
               </>
             )}
             <F label="描述"><TextInput rows={2} value={t.description ?? ''} onChange={(x) => set({ description: x })} /></F>

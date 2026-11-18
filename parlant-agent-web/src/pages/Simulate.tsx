@@ -22,6 +22,12 @@ interface SseEvent {
   data?: { message?: string; chunks?: (string | null)[]; status?: string; participant?: { id?: string; display_name?: string } }
 }
 
+/** 人工转接标记：agent 消息（通常来自 canned response）内含此标记时，前端渲染转接卡片。
+ *  与定义层 csr_human_handoff 预设话术约定一致；替换客服系统地址只需改 HANDOFF_URL。 */
+const HANDOFF_MARKER = '[[HUMAN_HANDOFF]]'
+const HANDOFF_URL = 'https://example.com/human-support?session='
+const stripMarker = (text: string) => text.replaceAll(HANDOFF_MARKER, '').trim()
+
 export default function Simulate() {
   const navigate = useNavigate()
   const { currentAgent, currentUser } = useApp()
@@ -303,7 +309,9 @@ export default function Simulate() {
           )}
           <div ref={threadRef} className="flex-1 overflow-y-auto px-8 pb-3 pt-6">
             <div className="mx-auto flex max-w-[720px] flex-col gap-4">
-              {messages.map((m) => (
+              {messages.map((m) => {
+                const handoff = m.role === 'agent' && m.content.includes(HANDOFF_MARKER)
+                return (
                 <div key={m.message_id} className={`flex flex-col gap-1.5 ${m.role === 'customer' ? 'items-start' : 'items-end'}`}>
                   <div className={`flex items-center gap-1.5 text-[11.5px] text-[var(--muted)] ${m.role === 'agent' ? 'flex-row-reverse' : ''}`}>
                     {m.role === 'customer' ? m.user_name ?? '用户' : m.agent_name ?? 'Agent'}
@@ -315,9 +323,26 @@ export default function Simulate() {
                         : 'rounded-tr border border-[var(--primary-line)] bg-[var(--primary-weak)]'
                     }`}
                   >
-                    {m.content}
+                    {stripMarker(m.content) || (handoff ? ' ' : m.content)}
                     {m.status === 'streaming' && <span className="ml-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--primary)] align-middle" />}
                   </div>
+                  {handoff && (
+                    <div className="flex w-[72%] flex-col gap-2 rounded-xl border border-[var(--warning-line,var(--line))] bg-[var(--surface)] px-3.5 py-3">
+                      <div className="flex items-center gap-2 text-[13px] font-medium text-[var(--ink)]">
+                        <span className="inline-block h-2 w-2 rounded-full bg-[var(--warning,var(--primary))]" />
+                        正在转接人工客服
+                      </div>
+                      <div className="text-[12px] leading-relaxed text-[var(--muted)]">
+                        当前会话已标记转人工，您可以点击下面按钮进入人工坐席页面继续沟通。
+                      </div>
+                      <button
+                        className="self-start rounded-lg border border-[var(--primary-line)] bg-[var(--primary-weak)] px-3 py-1.5 text-[12px] text-[var(--primary)] hover:opacity-80"
+                        onClick={() => window.open(`${HANDOFF_URL}${encodeURIComponent(activeId ?? '')}`, '_blank')}
+                      >
+                        进入人工服务页面 →
+                      </button>
+                    </div>
+                  )}
                   {m.role === 'agent' && (
                     <div className="flex items-center gap-2">
                       {m.trace_id && (
@@ -333,7 +358,8 @@ export default function Simulate() {
                     </div>
                   )}
                 </div>
-              ))}
+                )
+              })}
               {processing && (
                 <div className="flex items-center gap-2 self-end text-[12px] text-[var(--primary)]">
                   正在处理
