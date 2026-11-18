@@ -193,6 +193,12 @@ class ToolDef(_Base):
     method: str = "GET"
     url: str = ""
     headers: dict[str, str] = Field(default_factory=dict)
+    # 工具结果 → 变量自动回写（仅成功响应；HTTP 失败/超时不动变量）：
+    # {变量名: 结果取值路径}，路径基于 ToolResult.data（{"status":.., "data":..}）
+    # 点号寻址，支持列表下标（如 "data.items.0.code"）；写入 key=customer_id
+    # （客户级覆盖，与 variable_update 一致）。配了它即可摘掉变量上的 tool 绑定，
+    # 避免引擎每条消息自动代调外部接口（2026-11-07 排查实证）。
+    variable_mappings: dict[str, str] = Field(default_factory=dict)
 
 
 class Tools(_Base):

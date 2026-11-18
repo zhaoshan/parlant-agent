@@ -45,8 +45,13 @@ class AgentBuilder:
 
         # remote 远程服务工具：按 schema 声明生成通用 HTTP 工具实例（幂等复用），
         # 供后续 tool 节点/指南绑定（resolve_tool 兜底解析，见 builtin_tools.py）。
-        from app.services.http_tools import register_remote_tools
+        # http_tools 的容器注入同点完成（variable_mappings 结果回写需要）。
+        from app.services.http_tools import (
+            register_remote_tools,
+            set_runtime_services as set_http_tools_services,
+        )
 
+        set_http_tools_services(self._server.container)
         register_remote_tools(definition.tools.tools)
 
         agent = await self._server.create_agent(

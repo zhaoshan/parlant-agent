@@ -42,6 +42,15 @@ logger = structlog.get_logger()
 # loader 装配时按 agent 定义逐个生成；同名工具可被多个 agent 复用（id 相同视为同一定义）
 _REMOTE_TOOLS: dict[str, Any] = {}
 
+# runtime 容器注入（agent_loader.load 时调用），供 variable_mappings 结果回写写变量存储
+_container: Any = None
+
+
+def set_runtime_services(container: Any) -> None:
+    """注入 p.Server 的容器（供结果回写访问 ContextVariableStore/AgentStore）。"""
+    global _container
+    _container = container
+
 
 def register_remote_tools(tools: list[Any]) -> list[str]:
     """按 AgentDefinition 的 tools 声明生成/注册 remote 工具，返回新注册的工具名。
@@ -83,6 +92,8 @@ def make_http_tool(tool_def: Any) -> Any:
     timeout = float(tool_def.timeout_seconds or 30.0)
     consequential = bool(tool_def.consequential) if tool_def.consequential is not None else True
     description = tool_def.description or f"调用远程服务 {name}（{method} {url_template}）"
+    # 结果 → 变量回写映射（{变量名: 结果取值路径}，见 _write_mapped_variables）
+    variable_mappings: dict[str, str] = dict(tool_def.variable_mappings or {})
 
     props: dict[str, Any] = (tool_def.input_schema or {}).get("properties") or {}
     # 必填参数取 input_schema.required（此前被丢弃 → 引擎 tool.required 为空 →
@@ -99,6 +110,7 @@ def make_http_tool(tool_def: Any) -> Any:
             url_template=url_template,
             static_headers=static_headers,
             timeout=timeout,
+            variable_mappings=variable_mappings,
             context=context,
             kwargs=kwargs,
         )
@@ -138,6 +150,7 @@ async def _http_invoke(
     url_template: str,
     static_headers: dict[str, str],
     timeout: float,
+    variable_mappings: dict[str, str],
     context: p.ToolContext,
     kwargs: dict[str, Any],
 ) -> p.ToolResult:
@@ -185,6 +198,13 @@ async def _http_invoke(
         elif remaining:
             body = remaining
 
+    # 失败日志统一带出调用入参（method/url/params/body），否则 ConnectTimeout 这类
+    # 异常只有一行报错，无法分辨是地址不通还是参数拼装错（2026-11-07 排查实证）。
+    call_info = (
+        f"method={method} url={url}"
+        f" params={json.dumps(params, ensure_ascii=False) if params else '{}'}"
+        f" body={json.dumps(body, ensure_ascii=False)[:1000] if body is not None else 'None'}"
+    )
     try:
         # trust_env=False：本机系统代理（macOS :7899）会劫持 127.0.0.1 请求导致
         # 502（见 CLAUDE.md 五.4）；remote 服务为内网/本地，强制直连。
@@ -197,7 +217,7 @@ async def _http_invoke(
                 headers=headers or None,
             )
     except httpx.HTTPError as exc:
-        logger.warning(f"[remote-tool:{name}] HTTP 请求失败: {type(exc).__name__}: {exc}")
+        logger.warning(f"[remote-tool:{name}] HTTP 请求失败: {type(exc).__name__}: {exc} | {call_info}")
         return p.ToolResult(data={"error": f"{type(exc).__name__}: {exc}"})
 
     try:
@@ -206,7 +226,7 @@ async def _http_invoke(
         data = {"status": resp.status_code, "text": resp.text[:2000]}
 
     if resp.status_code >= 400:
-        logger.warning(f"[remote-tool:{name}] HTTP {resp.status_code}: {url} -> {data}")
+        logger.warning(f"[remote-tool:{name}] HTTP {resp.status_code}: {url} -> {data} | {call_info}")
         return p.ToolResult(
             data={
                 "error": f"HTTP {resp.status_code}",
@@ -215,4 +235,78 @@ async def _http_invoke(
                 "method": method,
             }
         )
+    # 成功也留痕（info）：验证"哪次调用带了什么参数/返回多少"全靠它——
+    # 变量通道的自动调用不在 engine.not_prepared 日志里，只能靠这里观测。
+    logger.info(f"[remote-tool:{name}] HTTP {resp.status_code}: {url} | {call_info} -> {json.dumps(data, ensure_ascii=False)[:300] if data is not None else 'None'}")
+    # 成功响应：按声明的 variable_mappings 把结果回写变量（摘掉了变量 tool 绑定后，
+    # 这就是订单状态类变量的唯一写入通道；失败/超时不写，保持旧值）
+    if variable_mappings:
+        await _write_mapped_variables(name, context, variable_mappings, {"status": resp.status_code, "data": data})
     return p.ToolResult(data={"status": resp.status_code, "data": data})
+
+
+def _resolve_path(obj: Any, path: str) -> tuple[bool, Any]:
+    """点号路径取值：基于 ToolResult.data 结构寻址，支持列表下标。
+
+    例：{"data": {"orderStatus": "已确认"}} + "data.orderStatus" -> (True, "已确认")
+    路径任一段不存在 / 类型不符 -> (False, None)（不视为错误，仅跳过该变量）。
+    """
+    cur = obj
+    for seg in path.split("."):
+        if isinstance(cur, dict):
+            if seg not in cur:
+                return False, None
+            cur = cur[seg]
+        elif isinstance(cur, list):
+            if not seg.isdigit() or int(seg) >= len(cur):
+                return False, None
+            cur = cur[int(seg)]
+        else:
+            return False, None
+    return True, cur
+
+
+async def _write_mapped_variables(
+    tool_name: str,
+    context: p.ToolContext,
+    mappings: dict[str, str],
+    result_data: Any,
+) -> None:
+    """把工具结果按 mappings 声明回写 ContextVariableStore（key=customer_id）。
+
+    变量解析与 builtin variable_update 同款：agent tag + agent.tags + 无标签。
+    单变量解析失败/未声明/取不到值只跳过并记日志，绝不影响工具返回值。
+    """
+    if _container is None:
+        logger.warning(f"[remote-tool:{tool_name}] variable_mappings 已声明但容器未注入，跳过回写")
+        return
+    try:
+        from parlant.core.agents import AgentStore
+        from parlant.core.context_variables import ContextVariableStore
+        from parlant.core.tags import Tag
+
+        agent_store = _container[AgentStore]
+        cv_store = _container[ContextVariableStore]
+        agent = await agent_store.read_agent(p.AgentId(context.agent_id))
+
+        vars_by_name: dict[str, Any] = {}
+        for tag in ([Tag.for_agent_id(agent.id).id] + [t.id for t in agent.tags] + [""]):
+            for var in await cv_store.list_variables(tags=[tag] if tag else []):
+                vars_by_name.setdefault(var.name, var)
+
+        written: list[str] = []
+        for var_name, path in mappings.items():
+            var = vars_by_name.get(var_name)
+            if not var:
+                logger.warning(f"[remote-tool:{tool_name}] variable_mappings 变量未声明: {var_name}")
+                continue
+            found, value = _resolve_path(result_data, path)
+            if not found or value is None:
+                logger.info(f"[remote-tool:{tool_name}] 路径 {path!r} 未取到值，跳过变量 {var_name}")
+                continue
+            await cv_store.update_value(var.id, context.customer_id, value)
+            written.append(f"{var_name}<={path}")
+        if written:
+            logger.info(f"[remote-tool:{tool_name}] 结果回写变量 [{context.customer_id}]: {', '.join(written)}")
+    except Exception as exc:  # noqa: BLE001 - 回写是旁路能力，绝不阻断工具返回
+        logger.warning(f"[remote-tool:{tool_name}] 结果回写失败（忽略）: {exc!r}")
